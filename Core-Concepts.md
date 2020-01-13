@@ -247,7 +247,7 @@
   * No guaruntee that the ip of the database pod will always remain the same.
   * Better way for web app to access the db is using a service. so we create a service to expose the db application across the cluster. 
   * The service cannot join the pod network because the service is not an actual thing. 
-    * Not a container like pod so it doesn't have any interfaces or an actively listening process. virtual component that only lives in the cabinet as memory. 
+    * Not a container like pod so it doesn't have any interfaces or an actively listening process. virtual component that only lives in the kubernetes memory. 
   * Kube-proxy is a process that runs on each node in the kubernetes cluster
     * Job is to look for new services and every time a new service is created, it creates the appropriate rules on each node to forward traffic to those services to the backend pods
     * One way it does this is by using IPTABLES rules
@@ -259,15 +259,188 @@
   * or `kubectl get pods -n kubesystem` with kubeadm.
   * `kubectl get daemonset -n kube-system`
 
-## Recap - PODs
+## PODs
+
+### Recap
 
 * WIth kubernetes, ultimate aim is to deploy our application in the form of containers on a set of machines that are configured as worker nodes in a cluster. 
+* Kubernetes does not deploy containers directly on worker nodes.
+  * Instead the containers are encapsulated into a kubernetes object known as PODs.
+  * **Pod:** Single instance of an application
+    * Smallest thing you can create in kubernetes
+* Simplest of simple instance one  instance of application running in a single docker container encapsulated in a POD
+  * As it scales, spin up additional instances by creating a new pod with a new instance of the same application
+  * If user base further increases and current node has no sufficient capacity, create a new pod on a new node in the cluster. 
+  * PODS usually have a 1 - 1 relationship
+  * To scale up, you create new pods
+    * Scale down delete pods
+
+* Multi-Container PODs
+  * A single pod can have multiple containers except for the fact that they're usually not multiple containers of the same kind
+  * If intention was to scale our application, then we would need to create additional pods
+  * **Helper Container**
+    * supporting task for our web app such as processing a user entered data processing a file uploaded by the user etc. and want helper containers to live alongside application container
+      * In that case you can have both of these containers part of the same pod so that when a new application container is created, the helper is also created and when it dies, the helper also dies since they are part of the same pod. 
+      * The two containers can also communicate with each other directly by refering to each other as localhost. 
+      * Can also share same storage space
+
+### How to deploy Pods
+* `Kubectl run nginx` 
+  * deploys a docker container by creating a POD. So first creates a POD automatically and deploys an instance of the nginx docker image. 
+    * Where does it get app image from? 
+      * `--image nginx` command so `kubectl run nginx --image nginx`
+      * See pods available with `kubectl get pods`
+
+
+### PODs with YAML
+
+* YAML in kubernetes
+* pod-defintion.yml
+* ```yaml
+  apiVersion:
+  kind: 
+  metadata:
+
+  spec:
+  ```
+* all required fields!!
+  * `apiVersion: v1` could also be `apps/v1`
+  * kind could be `POD`, `Service`, `ReplicaSet`, `Deployment`
+  * **metadata**:
+    * ```yaml
+      metadata: 
+        name: myapp-pod
+        labels: 
+            app: myapp
+            type: front-end   
+    ```
+    
+*  Metadata is a dictionary. number of spaces doesn't matter but they should stay the same since they are siblings
+   * cannot add any other property that you want in metadata. 
+ * For spec, refer to documentaion since there are plenty. With app that has a single container though, not too tough
+  ```yaml
+  spec:
+    containers:
+      - name: nginx-container
+        image: nginx
+  ```
+  * dash(-) indicates that it is a list and first item in the list. 
+ * when yaml is made, run `kubectl create -f pod-definition.yml`
+ * Delete pod with `kubectl delete myapp-pod`
+ * Once pod is created, run `kubectl get pods` to view pods available.
+   * to see detailed info about pod run `kubectl describe pod myapp-pod` 
+
+## ReplicaSets
+
+* They are the processes that monitor kubernetes objects and respond accordingly. 
+
+* Why do we need replica set
+  * If something happens and pod fails, users will no longer be ale to access our application
+  * to prevent users from losing access to our app, we would like to have more than one insance or pod running at the same time. 
+  * Replication controller helps us run multiple instances of a single pod in the kubernetes cluster and providing high availability
+* Can you use replication controller if you plan on using a single pod? 
+  * **NO** Even if you havea single pod, the replication controller can help by automatically bringing up a new pod when the existing one fails. 
+  * Thus the replication controller ensures that the specified number of parts are running at all times. 
+
+* Also need to create multiple pods to share load across them. 
+* ![replication-controller](images/replication-controller.jpg)
+
+* Two similar terms for when the demand increases both have same purpose but not the same. 
+  * **Replication Controller** 
+    * The older tech that's being replaced by replica set. 
+  * **Replica Set** 
+    * New recomended way to set up replication
+
+### Creating a Replication Controller
+
+`rc-definition.yml`
+```yaml
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: myapp-rc
+  labels:
+    app: myapp
+    type: front-end
+
+spec:
+  template:
+    metadata:
+      name: myapp-pod
+      labels:
+        app: myapp
+        type: front-end
+    spec:
+      containers:
+        - name: nginx-container
+          image: nginx
+  
+  replicas: 3
+
+
+```
+* create template section under spec to provide a part template to be used by the replication controller
+  * move all the contents of the pod-defintion file except for the first few lines and put it in the rc-defintion file
+  * Replication controller is parent, pod definition is child
+  * for replica count, add replicas tag to spec and input the number of replicas you'll need under it. 
+  * then run `kubectl create -f rc-definition.yml`
+    * when created, it also creates the pods.
+  *  to see replicas, run `kubectl get replicationcontroller` command and it will give you number of replicas. 
+
+### Creating a ReplicaSet
+
+`replicaset-definition.yml`
+```yaml
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata: 
+  name: myapp-replicaset
+  labels:
+    app: myapp
+    type: front-end
+  
+
+spec:
+  template:
+    metadata:
+      name: myapp-pod
+      labels:
+        app: myapp
+        type: front-end
+    spec:
+      containers:
+        - name: nginx-container
+          image: nginx
+  
+  replicas: 3
+  selector:
+    matchLabels:
+      type: front-end
+
+```
+
+* Need to have the apps/ or you will get an error: unable to recognize replicaset
+* ReplicaSet needs `selector:` 
+* Can also manage parts that were nt created as part of the replica at creation
+  * ie. The reports created before the creation of the replica set that match labels specified in the selector.
+  * Replica set will also take those pods into consideration when creating the replicas. 
+* can still use `selector:` in replicacontroller but just assumes it is the same as the labels provided in the part defintion file
+* Required for ReplicaSet and has to be written in form of matchLabels: 
+  * Simply matches the labels specified under it to the labels on the pod. 
+  * Replica set selector also provides many other options for matching labels that were not available in the replication controller
+
+* to create run `kubectl create -f replicaset-definition.yml`
+  * to see list of pods, run `kubectl get replicaset`
+
+### Labels and Selectors
+* 
 
 
 
 
 
-   
+
+
 1. [Core Concepts](#core-concepts)
    1. [Cluster Architecture](#cluster-architecture)
    2. [ETCD](#etcd)
@@ -278,4 +451,8 @@
    5. [Kube Scheduler](#kube-scheduler)
    6. [Kubelet](#kubelet)
    7. [Kube Proxy](#kube-proxy)
-   8. [Recap - PODs](#recap---pods)
+   8. [PODs](#pods)
+      1. [Recap](#recap)
+      2. [How to deploy Pods](#how-to-deploy-pods)
+      3. [PODs with YAML](#pods-with-yaml)
+      4. [Labels and Selectors](#labels-and-selectors)
