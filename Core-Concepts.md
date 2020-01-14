@@ -1,4 +1,34 @@
-# Core Concepts
+Core Concepts
+=============
+
+## Table of Contents
+
+1. [Core Concepts](#core-concepts)
+   1. [Table of Contents](#table-of-contents)
+   2. [Cluster Architecture](#cluster-architecture)
+   3. [ETCD](#etcd)
+      1. [ETCD For Beginners](#etcd-for-beginners)
+      2. [ETCD in Kubernetes](#etcd-in-kubernetes)
+   4. [Kube-API Server](#kube-api-server)
+   5. [Kube Controller Manager](#kube-controller-manager)
+   6. [Kube Scheduler](#kube-scheduler)
+   7. [Kubelet](#kubelet)
+   8. [Kube Proxy](#kube-proxy)
+   9. [PODs](#pods)
+      1. [Recap](#recap)
+      2. [How to deploy Pods](#how-to-deploy-pods)
+      3. [PODs with YAML](#pods-with-yaml)
+   10. [Helpful Pod Commands](#helpful-pod-commands)
+   11. [Namespaces](#namespaces)
+      1. [Basics](#basics)
+      2. [Resource Limits](#resource-limits)
+      3. [DNS](#dns)
+      4. [Commands](#commands)
+   12. [Services](#services)
+      1. [Services Use Case](#services-use-case)
+      2. [Service Types - Basics](#service-types---basics)
+      3. [NodePort](#nodeport)
+
 
 ## Cluster Architecture
 
@@ -313,7 +343,7 @@
         labels: 
             app: myapp
             type: front-end   
-    ```
+      ```
     
 *  Metadata is a dictionary. number of spaces doesn't matter but they should stay the same since they are siblings
    * cannot add any other property that you want in metadata. 
@@ -433,7 +463,265 @@ spec:
   * to see list of pods, run `kubectl get replicaset`
 
 ### Labels and Selectors
-* 
+* How ReplicaSet knows which pods to monitor
+* Labeling comes in handy here. 
+  * Can provide labels as a filter for replica set
+  * under the selector section we use `matchLabels` and provide the same label we used while creating the pod. 
+
+* Scale: 
+  * Update the number of replicas in the definition files to 6
+    * Run `kubectl replace -f replicaset-definition.yml` to update the replicaset to have 6 replicas
+  * run `kubectl scale --replicas=6 -f replicaset-definition.yml` or `kubectl scale --replicas=6 myapp-rep`
+    * using file name as input will not result in the number of replicas being updated automatically
+
+* Commands
+  * `kubectl create -f replicaset-definition.yml` creates replicaset
+  * `kubectl get replicaset` see list of replicasets created
+  * `kubectl delete replicaset myapp-replicaset` *also deletes all underlying pods.
+  * `kubectl replace -f replicaset-definition.yml` to update it after making changes
+  * `kubectl scale --replicas=6 -f replicaset-definition.yml` 
+  * `kubectl edit replicaset new-replica-set` modifies the image, you can save out of tmp by running `:w [filename]`
+
+## Deployments
+
+### What is a Deployment
+
+* Things you want in a deployment: 
+  * Say you have a web server that needs to be deployed in a production environment
+  * You need not one, but many instances running
+  * Whenever newer versions or builds become available on the docker registry, you would like to upgrade your builds seamlessly
+    * But not all at the same time since it may impact users
+    * may want to upgrade one after the other
+  * Would like to be able to roll back
+  * Would like to make multiple changes to environment, don't want to make changes immediately
+    * but apply a pause to your environment, make changes and then resume so that all changes are rolled out at the same time.
+* **Kubernetes can do that** 
+
+* Pods -> Replica Set -> Deployment
+  * Deployment can update underlying instances seamlessly. 
+  * ![deployment](images/deployment.jpg)
+
+### Definition
+Same as replica set except kind will now be `Deployment`
+`deployment-definition.yml`
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp-deployment
+  labels:
+    app: myapp
+    type: front-end
+spec:
+  template:
+    metadata:
+      name: myapp-pod
+      labels:
+        app: myapp
+        type: front-end
+      spec:
+        containers:
+          - name: nginx-container
+            image: nginx
+  replicas: 3
+  selector:
+    matchLabels:
+      type: front-end
+```
+* `kubectl create -f deployment-definition.yml`
+* `kubectl get deployments`
+* `kubectl get replicaset` will get the replicaset in the deployment
+* `kubectl get pods` 
+* Basically the same as replicaset except that it created a deployment object.
+* `kubectl get all` shows all created objects at once. 
+
+## Helpful Pod Commands
+* Create an NGINX Pod
+  * `kubectl run --generator=run-pod/v1 nginx --image=nginx`
+* Generate POD Manifest YAML file (`-o yaml`) Don't create it(`--dry-run`)
+  * `kubectl run --generator=run-pod/v1 nginx --image=nginx --dry-run -o yaml`
+* Create a deployment
+  * `kubectl run --generator=deployment/apps.v1 nginx --image=nginx`
+* Generate Deployment YAML file (`-o yaml`). Don't create it(`--dry-run`)
+  * `kubectl run --generator=deployment/apps.v1 nginx --image=nginx --dry-run -o yaml`
+* Generate Deployment YAML file (-o yaml). Don't create it(--dry-run) with 4 Replicas (--replicas=4)
+  * `kubectl run --generator=deployment/apps.v1 nginx --image=nginx --dry-run --replicas=4 -o yaml`
+* Save it to a file - (if you need to modify or add some other details before actually creating it) 
+  * `kubectl run --generator=deployment/apps.v1 nginx --image=nginx --dry-run --replicas=4 -o yaml > nginx-deployment.yaml`
+
+
+## Namespaces
+
+### Basics
+
+* Two boys named Mark, to address each other, they use last names. 
+  * In their house though with families, they address by first name because there isn't another mark there. 
+  * ![namespace-houses](images/namespaces-houses.jpg)
+
+* So far we've been doing everything in the default namespace. 
+  * Created automatically when the cluster is first set up
+* When cluster is first set up, kubernetes creates a set of pods and services for its internal purpose such as those required by the networking solution, dns service. etc. to isolat them from the user to prevent you from accidentally deleting or modifying the services. 
+  * Created under namespace *kube-system* 
+* *kube-public*
+  * where resources that should be made available to all users are created. 
+
+* If your environment is small you shouldn't really have to worry about namespaces. 
+  * As you grow though, the use of namespaces is very important
+
+* Create namespaces too 
+  * IE namespace for dev and prod so you don't accidentally modify a resource in production when working in dev. 
+
+### Resource Limits
+
+  * You can also assign a quota of resources to each of these namespaces so it's guarunteed a certain amount and doesn't use more than it's allowed.
+  * ![resource-limits](images/resource-limits.jpg)
+
+### DNS
+
+* can communicate with the same server easily. But if you want to communicate with something outside of the namespace, you must append the name of the namespace to the name of the service
+  * Use the `servicename.namespace.svc.cluster.local` format. In this case it would be `db-service.dev.svc.cluster.local`
+
+* You're able to do this because when the service is created, a DNS entry is added automatically in this format.
+* `cluster.local` is the default domain name of the kubernetes cluster. `SVC` is the subdomain. 
+  * ![DNS-format](images/DNS-format.jpg)
+
+### Commands
+  * Get pods in the kube-system namespace
+    * `kubectl get pods --namespace=kube-system`
+  * Create pod in dev namespace
+    *  `kubectl create -f pod-definition.yml --namespace=dev`
+    *  Can also move namespace into the pod definition file under metadata section like: 
+      ```yaml
+      apiVersion: v1
+      kind: Pod
+
+      metadata:
+        name: myapp-pod
+         ### LIKE THIS #######
+        namespace: dev
+         ##################### 
+
+        labels:
+          app: myapp
+          type: front-end
+      spec:
+        containers:
+          - name: nginx-container
+            image: nginx
+      ```
+  * Create Namespace Like
+   `namespace-dev.yml`
+    ```yaml
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: dev
+    ```
+    * `kubectl create -f namespace-dev.yml`
+    * `kubectl create namespace dev`
+  * Switch default namespace to dev
+    * `kubectl config set-context $(kubectl config current-context) --namespace=dev`
+  * get pods from all namespaces
+    * `kubectl get pods --all-namespaces`
+  
+
+  * Create a Resource Quota
+    * ```yaml
+      apiVersion: v1
+      kind: ResurceQuota
+      metadata:
+        name: compute-quota
+        namespace: dev
+      
+      spec:
+        hard:
+          pods: "10"
+          requests.cpu: "4"
+          requests.memory: 5Gi
+          limits.cpu: "10"
+          limits.memory: 10Gi
+      ```
+    * `kubectl create -f compute-quota.yaml`
+
+## Services
+
+* enable communication between various components within and outside of the application. 
+* Help connect apps together with other apps or users
+
+* IE. App has groups of pods running various sections such as 
+  * a group for serving front end load to users 
+  * Group for running back end processes
+  * Third group connecting to an external data source
+
+* Enable loose coupling between microservices in our application
+
+### Services Use Case
+
+  * External Communication
+    * Deployed Pod having web app running on it
+    * How do we as an external user access the web page?
+      * Kubernetes Node has an IP address that is `192.168.1.2`
+      * Laptop is on the same network as well so has IP address `192.168.1.10`
+      * The internal POD network is in the range `10.244.0.0` and has an `IP 10.24.0.2`
+        * Clearly cannot ping or access the POD at address `10.244.0.2` since it's in a seperate network. 
+      
+      * Things we could do: 
+        * SSH into the kubernetes node at `192.168.1.2` and then from the node, we would be able to access the POD's webpage by doing a curl. Or if the node has a GUI, we could fire up a browser and see the wepgae from `http://10.244.0.2`
+          * ![external-service](images/external-service.jpg)
+        * That's not what we want though, we want to be able to access the webpage simply by accessing the IP of the kubernetes node. 
+      
+      * This is where kubernetes service comes into play. 
+        * Kubernetes service is an object just like PODs, ReplicaSet or Deployments that we worked with earlier. 
+        * Can listen to a port on the Node and forward requests on that port to a port on the POD running the WebApp.
+
+### Service Types - Basics
+
+1. NodePort
+   * Makes an internal POD accessible on a Port on the Node.
+2. ClusterIP
+   * The service creates a virtual IP inside the cluster to enable communication between different services such as a set of front end servers to a set of back end servers. 
+3. LoadBalancer
+   * Provisions a load balancer for our service in supported cloud providers.
+   * Distribute load across the different web servers in your front end tier. 
+
+  ![services-types](images/services-types.jpg)
+
+
+### NodePort
+
+  * Three ports involved:
+    * Port on the POD where the actual web server is running is **80**
+      * Also referred to as the **targetPort**
+    * Port on the service itself is just called the **Port**
+      * Terms are from the viewpoint of the service.
+    * Port on the node itself is running on 300008
+      * **NodePort** 
+      * Port range from `30000 - 32767`
+  * ![NodePort](images/Service-NodePort.jpg)
+
+  * How to create service
+    * `service-definition.yml`
+    * ```yaml
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: myapp-service
+          ### Can Have Label but don't need that
+        
+        spec:
+          type: NodePort
+          ports:
+            - targetPort: 80 #an array
+              port: 80 #Only mandatory field
+              nodePort: 30008
+          selector:
+            #provide a list of labels and pull values
+            #from that in pod metadata section
+            app: myapp
+            type: front-end
+
+
+      ```
 
 
 
@@ -441,18 +729,3 @@ spec:
 
 
 
-1. [Core Concepts](#core-concepts)
-   1. [Cluster Architecture](#cluster-architecture)
-   2. [ETCD](#etcd)
-      1. [ETCD For Beginners](#etcd-for-beginners)
-      2. [ETCD in Kubernetes](#etcd-in-kubernetes)
-   3. [Kube-API Server](#kube-api-server)
-   4. [Kube Controller Manager](#kube-controller-manager)
-   5. [Kube Scheduler](#kube-scheduler)
-   6. [Kubelet](#kubelet)
-   7. [Kube Proxy](#kube-proxy)
-   8. [PODs](#pods)
-      1. [Recap](#recap)
-      2. [How to deploy Pods](#how-to-deploy-pods)
-      3. [PODs with YAML](#pods-with-yaml)
-      4. [Labels and Selectors](#labels-and-selectors)
