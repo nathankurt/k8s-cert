@@ -18,16 +18,6 @@ Core Concepts
       1. [Recap](#recap)
       2. [How to deploy Pods](#how-to-deploy-pods)
       3. [PODs with YAML](#pods-with-yaml)
-   10. [Helpful Pod Commands](#helpful-pod-commands)
-   11. [Namespaces](#namespaces)
-      1. [Basics](#basics)
-      2. [Resource Limits](#resource-limits)
-      3. [DNS](#dns)
-      4. [Commands](#commands)
-   12. [Services](#services)
-      1. [Services Use Case](#services-use-case)
-      2. [Service Types - Basics](#service-types---basics)
-      3. [NodePort](#nodeport)
 
 
 ## Cluster Architecture
@@ -689,39 +679,51 @@ spec:
 
 ### NodePort
 
-  * Three ports involved:
-    * Port on the POD where the actual web server is running is **80**
-      * Also referred to as the **targetPort**
-    * Port on the service itself is just called the **Port**
-      * Terms are from the viewpoint of the service.
-    * Port on the node itself is running on 300008
-      * **NodePort** 
-      * Port range from `30000 - 32767`
-  * ![NodePort](images/Service-NodePort.jpg)
+* Three ports involved:
+ * Port on the POD where the actual web server is running is **80**
+   * Also referred to as the **targetPort**
+ * Port on the service itself is just called the **Port**
+   * Terms are from the viewpoint of the service.
+ * Port on the node itself is running on 300008
+   * **NodePort** 
+   * Port range from `30000 - 32767`
+* ![NodePort](images/Service-NodePort.jpg)
 
-  * How to create service
-    * `service-definition.yml`
-    * ```yaml
-        apiVersion: v1
-        kind: Service
-        metadata:
-          name: myapp-service
-          ### Can Have Label but don't need that
-        
-        spec:
-          type: NodePort
-          ports:
-            - targetPort: 80 #an array
-              port: 80 #Only mandatory field
-              nodePort: 30008
-          selector:
-            #provide a list of labels and pull values
-            #from that in pod metadata section
-            app: myapp
-            type: front-end
+* How to create service
+ * `service-definition.yml`
+ * ```yaml
+     apiVersion: v1
+     kind: Service
+     metadata:
+       name: myapp-service
+       ### Can Have Label but don't need that
+     
+     spec:
+       type: NodePort
+       ports:
+         - targetPort: 80 #an array
+           port: 80 #Only mandatory field
+           nodePort: 30008
+       selector:
+         #provide a list of labels and pull values
+         #from that in pod metadata section
+         app: myapp
+         type: front-end
+   ```
 
+ * When dones run `kubectl create -f service-definition.yml` to create
+ * `kubectl get services` to get the services that are running. 
+   * Will give you a `CLUSTER-IP` IP and you can now access that IP using curl or web browser
+     * `curl http://192.168.1.2:30008`
 
-      ```
+* What do you do when you have multiple pods? 
+  * We have multiple similar pods running our web application. they all have the same labels with a key app and set to value `myapp`
+    * same label is used as a selector during the creation of the service. 
+  * So when service is created, it looks for a matching pod with the label and finds three of them
+  * Service then automatically selects all the three pods as endpoints to forward the external requests. 
+  * **NO ADDITIONAL CONFIG REQUIRED** 
+
+* What about when the web application is on pods in seperate nodes. 
 
 
 
