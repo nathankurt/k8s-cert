@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"markdown.extension.completion.root": "/",
+		"markdown.extension.toc.githubCompatibility": true
+	}
+}
