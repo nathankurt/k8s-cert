@@ -1156,7 +1156,7 @@ Back to Kubernetes...
       * `kubectl describe node kubemaster | grep Taint`
     * To remove taint from master which has the effect of NoSchedule:
       * `kubectl taint nodes master node-role.kubernetes.io/master:NoSchedule-`
-
+ok
 
 ## Node Selectors
 
