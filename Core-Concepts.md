@@ -24,6 +24,7 @@ Core Concepts
       1. [POD](#pod)
       2. [Deployment](#deployment)
       3. [Service](#service)
+      4. [Misc](#misc)
 
 
 ## Cluster Architecture
@@ -797,6 +798,8 @@ spec:
   * `kubectl run --generator=run-pod/v1 nginx --image=nginx`
 * **Generate POD Manifest YAML file (`-o yaml`) Don't create it (`--dry-run`)**
   * `kubectl run --generator=run-pod/v1 nginx --image=nginx --dry-run -o yaml`
+* **Generate NGINX POD with labels set to tier=db**
+  * `kubectl run --generator=run-pod/v1 nginx --image=nginx -l tier=db`
 
 ### Deployment
 
@@ -809,7 +812,7 @@ spec:
     * The usage --generator=deployment/v1beta1 is deprecated as of Kubernetes 1.16. The recommended way is to use the kubectl create option instead.
   * **NOTE:** kubectl create deployment does not have a `--replicas` option. You could first create it and then scale it using the `kubectl scale` command. 
     * `kubectl create deployment --image=nginx nginx`
-    * `kubectl scale --replicas=x nginx` 
+    * `kubectl scale deployment.apps/nginx --replicas=x` 
       * This one is a maybe.. will try it out
 *  **Save it to a file - (If you need to modify or add some other details)**
    *  `kubectl create deployment --image=nginx nginx --dry-run -o yaml > nginx-deployment.yaml`
@@ -818,10 +821,41 @@ spec:
 ### Service
 
   * **Create a Service named redis-service of type ClusterIP to expose pod redis on port 6379**
-    * `kubectl expose pod redis --port=6379 --name redis-service --dry-run -o yaml` This will auto use the pod's labels as selectors.
-    * OR `
+    * `kubectl expose pod redis --port=6379 --name redis-service --dry-run -o yaml`
+      * This will auto use the pod's labels as selectors.
+    
+    OR
+
+    * `kubectl create service clusterip redis --tcp=6379:6379 --dry-run -o yaml` 
+      * (This will not use the pods labels as selectors, instead it will assume selectors as app=redis. You cannot pass in selectors as an option. So it does not work very well if your pod has a different label set. So generate the file and modify the selectors before creating the service)
+  
+  * **Create a Service named nginx of type NodePort to expose pod nginx's port 80 on port 30080 on the nodes:**
+    * `kubectl expose pod nginx --port=80 --name nginx-service --dry-run -o yaml`
+      *  (This will automatically use the pod's labels as selectors, but you cannot specify the node port. You have to generate a definition file and then add the node port in manually before creating the service with the pod.)
+
+    OR 
+
+    * `kubectl create service nodeport nginx -tcp=80:80 --node-port=30080 --dry-run -o yaml`
+      * (This will not use the pods labels as selectors)
+    * Both the above commands have their own challenges. While create service cannot accept a selector the other cannot accept a node port. I would recommend going with the `kubectl expose` command. If you need to specify a node port, generate a definition file using the same command and manually input the nodeport before creating the service.
 
 
+### Misc
+
+  * Create a service of type ClusterIP with the port 6379, 
+
+  * **Create a deployment named webapp using the image kodekloud/webapp-color with 3 replicas**
+    * Create Deployment with `kubectl create deployment webapp --image=kodekloud/webapp-color`
+      * Scale with `kubectl scale deployment.v1.apps/webapp --replicas=3`
+  
+  
+  * **Expose the webapp as service webapp-service application on port 30082 on the nodes on the cluster** 
+    * First run `kubectl expose deployment webapp --type=NodePort --port=8080 --name=webapp-service --dry-run -o yaml > webapp-service.yaml` To create the deployment and set the selector to the deployment "webapp" (This adds the endpoints you need)
+      * Then edit the file and add the line `nodePort: 30082` in the ports spec. 
+    
+    
+    * You could also do `kubectl create service nodeport webapp-service --tcp=8080 --node-port=30082 --dry-run -o yaml > create-service.yaml` 
+      * Then go and change the `selector: app: webapp-service` to `selector: app: webapp`
 
 1. [Core Concepts](#core-concepts)
    1. [Table of Contents](#table-of-contents)
@@ -844,3 +878,4 @@ spec:
       1. [POD](#pod)
       2. [Deployment](#deployment)
       3. [Service](#service)
+      4. [Misc](#misc)
