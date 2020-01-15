@@ -81,8 +81,8 @@ Core Concepts
   * How would the web server reach the database server on the other node?
   * Kube-proxy service ensures that the necessary rules are in place on the worker nodes to allow the containers running on them to reach each other. 
 
-![kube-architecture](images/kube-architecture.jpg)
-![kube-architecture2](images/kube-architecture2.jpg)
+![kube-architecture](/images/kube-architecture.jpg)
+![kube-architecture2](/images/kube-architecture2.jpg)
 
 ## ETCD
 
@@ -124,10 +124,10 @@ Core Concepts
       * `wget-q --https-only \"https://github.com/coreos/etcd/releases/download/v3.3.9/etcd-v3.3.9-linux-amd64.tar.gz"`
       * `etcd.service`
         * `--advertise-client-urls https://${INTERNAL_IP}:2379\\`
-        * ![etcd-service-manual](images/etcd-service-manual.jpg)
+        * ![etcd-service-manual](/images/etcd-service-manual.jpg)
   * Setup - Kubeadm
     * `kubectl get pods -n kube-system`
-      * ![etcd-kubectl](images/etcd-kubectl.jpg)
+      * ![etcd-kubectl](/images/etcd-kubectl.jpg)
     * `kubectlexec etcd-master –n kube-systemetcdctlget / --prefix –keys-only`
 
 * ETCD in HA Environment
@@ -279,7 +279,7 @@ Core Concepts
     * Job is to look for new services and every time a new service is created, it creates the appropriate rules on each node to forward traffic to those services to the backend pods
     * One way it does this is by using IPTABLES rules
       * In this case it creates an IP tables rule on each node in the cluster to forward traffic heading to the IP of the service which is 10.96.0.12to the IP of the actual pod which is 10.32.0.15
-  * ![pod-network](images/pod-network.jpg)
+  * ![pod-network](/images/pod-network.jpg)
 
 * Installing Kube-proxy
   * `wget https://storage.googleapis.com/kubernetes-release/release/v1.13.0/bin/linux/amd64/kube-proxy`
@@ -370,7 +370,7 @@ Core Concepts
   * Thus the replication controller ensures that the specified number of parts are running at all times. 
 
 * Also need to create multiple pods to share load across them. 
-* ![replication-controller](images/replication-controller.jpg)
+* ![replication-controller](/images/replication-controller.jpg)
 
 * Two similar terms for when the demand increases both have same purpose but not the same. 
   * **Replication Controller** 
@@ -496,7 +496,7 @@ spec:
 
 * Pods -> Replica Set -> Deployment
   * Deployment can update underlying instances seamlessly. 
-  * ![deployment](images/deployment.jpg)
+  * ![deployment](/images/deployment.jpg)
 
 ### Definition
 Same as replica set except kind will now be `Deployment`
@@ -553,7 +553,7 @@ spec:
 
 * Two boys named Mark, to address each other, they use last names. 
   * In their house though with families, they address by first name because there isn't another mark there. 
-  * ![namespace-houses](images/namespaces-houses.jpg)
+  * ![namespace-houses](/images/namespaces-houses.jpg)
 
 * So far we've been doing everything in the default namespace. 
   * Created automatically when the cluster is first set up
@@ -571,7 +571,7 @@ spec:
 ### Resource Limits
 
   * You can also assign a quota of resources to each of these namespaces so it's guarunteed a certain amount and doesn't use more than it's allowed.
-  * ![resource-limits](images/resource-limits.jpg)
+  * ![resource-limits](/images/resource-limits.jpg)
 
 ### DNS
 
@@ -580,7 +580,7 @@ spec:
 
 * You're able to do this because when the service is created, a DNS entry is added automatically in this format.
 * `cluster.local` is the default domain name of the kubernetes cluster. `SVC` is the subdomain. 
-  * ![DNS-format](images/DNS-format.jpg)
+  * ![DNS-format](/images/DNS-format.jpg)
 
 ### Commands
   * Get pods in the kube-system namespace
@@ -664,7 +664,7 @@ spec:
       
       * Things we could do: 
         * SSH into the kubernetes node at `192.168.1.2` and then from the node, we would be able to access the POD's webpage by doing a curl. Or if the node has a GUI, we could fire up a browser and see the wepgae from `http://10.244.0.2`
-          * ![external-service](images/external-service.jpg)
+          * ![external-service](/images/external-service.jpg)
         * That's not what we want though, we want to be able to access the webpage simply by accessing the IP of the kubernetes node. 
       
       * This is where kubernetes service comes into play. 
@@ -681,7 +681,7 @@ spec:
    * Provisions a load balancer for our service in supported cloud providers.
    * Distribute load across the different web servers in your front end tier. 
 
-  ![services-types](images/services-types.jpg)
+  ![services-types](/images/services-types.jpg)
 
 
 ### NodePort
@@ -694,7 +694,7 @@ spec:
  * Port on the node itself is running on 300008
    * **NodePort** 
    * Port range from `30000 - 32767`
-* ![NodePort](images/Service-NodePort.jpg)
+* ![NodePort](/images/Service-NodePort.jpg)
 
 * How to create service
  * `service-definition.yml`
@@ -733,7 +733,7 @@ spec:
 * What about when the web application is on pods in seperate nodes in the cluster
   * When we create a service, without any additional config, Kubernetes creates a service that spans across all the nodes in the cluster and maps the target port to the same node port on all the nodes in the cluster. 
   * This way you can access your application using the IP of any node in the cluster and using the same port number which in this case is 30008
-  * ![multiple-clusters-node-port](images/multiple-services-nodeport.jpg)
+  * ![multiple-clusters-node-port](/images/multiple-services-nodeport.jpg)
 
 * No matter what, service is created exactly the same. Making it highly flexible and adaptive. 
 
@@ -757,7 +757,7 @@ spec:
   * Similarly create additional services for Redis and allow the backend parts to access the redis system
   * Each layer can now scale or move as required without impacting communication between the various services. 
   * Each service gets an IP name assigned to it inside the cluster and that is the name that should be used by other pods to access the service. 
-    * ![cluster-ip](images/Cluster-IP.jpg) 
+    * ![cluster-ip](/images/Cluster-IP.jpg) 
 
 * Type of service is known as **cluster IP**
 
