@@ -25,6 +25,7 @@ Core Concepts
       2. [Deployment](#deployment)
       3. [Service](#service)
       4. [Misc](#misc)
+2. [Scheduling](#scheduling)
 
 
 ## Cluster Architecture
@@ -857,6 +858,24 @@ spec:
     * You could also do `kubectl create service nodeport webapp-service --tcp=8080 --node-port=30082 --dry-run -o yaml > create-service.yaml` 
       * Then go and change the `selector: app: webapp-service` to `selector: app: webapp`
 
+
+
+
+
+
+
+
+
+
+# Scheduling
+
+
+
+
+
+
+
+
 1. [Core Concepts](#core-concepts)
    1. [Table of Contents](#table-of-contents)
    2. [Cluster Architecture](#cluster-architecture)
@@ -879,3 +898,4 @@ spec:
       2. [Deployment](#deployment)
       3. [Service](#service)
       4. [Misc](#misc)
+2. [Scheduling](#scheduling)
