@@ -32,6 +32,9 @@
       4. [Annotations](#annotations)
    2. [Taints and Tolerations](#taints-and-tolerations)
       1. [Commands](#commands)
+      2. [Master Nodes](#master-nodes)
+   3. [Node Selectors](#node-selectors)
+   4. [Node Affinity](#node-affinity)
 4. [End Table of Contents](#end-table-of-contents)
 
 
@@ -1100,7 +1103,7 @@ Back to Kubernetes...
 
 ### Commands
 
-* Add Taint
+* Add Taint - Nodes
   * `kubectl taint nodes node-name key=value:taint-effect`
     * specify name of node to taint 
     * followed by taint itself, which is a key value pair. 
@@ -1113,10 +1116,60 @@ Back to Kubernetes...
         3. `NoExecute`:
            * New pods will not be scheduled on node and existing pods will be evicted
     * `kubectl taint nodes node1 app=blue:NoSchedule`
+  
+* Add Toleration - PODS 
+  * `pod-definition.yaml`
+    * ```yaml
+        apiVersion:
+        kind:
+        metadata:
+          name: myapp-pod
+        spec:
+          containers:
+            - name: nginx-container
+              image: nginx
+           #Values need to be enclosed with double quotes
+          tolerations:
+            - key: "app" #The key in key=value
+              operator: "Equal" #The = in key=value
+              value: "blue" #the value in key=value
+              effect: "NoSchedule" # the taint effect
+           #########################
+      ```
+  * `NoExecute` taint effect:
+    * When pod is evicted, it's killed. 
+
+* **Taints only Stop pods from coming in, it doesn't force pods to go to certain nodes**
+  * Just because `Node 1` has a `blue` taint and `Pod D` has a tolerance for `blue`, doesn't mean that `Pod D` will always be placed in `Node 1`
+     ![taint-not-placed](/images/taints-not-placed.jpg)
+    * That is called [Node Affinity](#node-affinity)
 
 
+### Master Nodes
+* So far we've only been referring to worker nodes. but we also have master nodes in the cluster
+  * technically just another node that has all the capabilities of hosting a pod plus runs all the management software.
+  * Scheduler doesn't schedule any pod on the master node.
+    * Taint is set on the master node automatically that prevents any parts from being scheduled on this node.
+    * ![master-taint](/images/master-taint.jpg)
+  * Best practice is to not deploy application workloads on a master server. 
+    * To see taint: 
+      * `kubectl describe node kubemaster | grep Taint`
+    * To remove taint from master which has the effect of NoSchedule:
+      * `kubectl taint nodes master node-role.kubernetes.io/master:NoSchedule-`
 
 
+## Node Selectors
+
+* **Example**: 
+  * You have three node cluster of which two are smaller nodes with lower hardware resources
+    * One is a larger node configured with more resources.
+  * Different workloads running in your cluster
+    * Would like to dedicate the data processing workloads that require higher horsepower to the larger as that is the only node that will not run out of resources in case the job demands extra. 
+
+  * In the current default setup, any pods can go to any nodes. 
+    * So data processing pod, could very well end up on lower-end nodes which is not desired. 
+
+## Node Affinity
 
 
 # End Table of Contents
@@ -1150,4 +1203,7 @@ Back to Kubernetes...
       4. [Annotations](#annotations)
    2. [Taints and Tolerations](#taints-and-tolerations)
       1. [Commands](#commands)
+      2. [Master Nodes](#master-nodes)
+   3. [Node Selectors](#node-selectors)
+   4. [Node Affinity](#node-affinity)
 4. [End Table of Contents](#end-table-of-contents)
