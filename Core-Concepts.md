@@ -18,6 +18,12 @@ Core Concepts
       1. [Recap](#recap)
       2. [How to deploy Pods](#how-to-deploy-pods)
       3. [PODs with YAML](#pods-with-yaml)
+      4. [Cluster IP](#cluster-ip)
+         1. [Creation](#creation)
+   10. [Imperitive Commands](#imperitive-commands)
+      1. [POD](#pod)
+      2. [Deployment](#deployment)
+      3. [Service](#service)
 
 
 ## Cluster Architecture
@@ -692,23 +698,23 @@ spec:
 * How to create service
  * `service-definition.yml`
  * ```yaml
-     apiVersion: v1
-     kind: Service
-     metadata:
-       name: myapp-service
-       ### Can Have Label but don't need that
-     
-     spec:
-       type: NodePort
-       ports:
-         - targetPort: 80 #an array
-           port: 80 #Only mandatory field
-           nodePort: 30008
-       selector:
-         #provide a list of labels and pull values
-         #from that in pod metadata section
-         app: myapp
-         type: front-end
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: myapp-service
+      ### Can Have Label but don't need that
+    
+    spec:
+      type: NodePort
+      ports:
+        - targetPort: 80 #an array
+          port: 80 #Only mandatory field
+          nodePort: 30008
+      selector:
+        #provide a list of labels and pull values
+        #from that in pod metadata section
+        app: myapp
+        type: front-end
    ```
 
  * When dones run `kubectl create -f service-definition.yml` to create
@@ -723,11 +729,118 @@ spec:
   * Service then automatically selects all the three pods as endpoints to forward the external requests. 
   * **NO ADDITIONAL CONFIG REQUIRED** 
 
-* What about when the web application is on pods in seperate nodes. 
+* What about when the web application is on pods in seperate nodes in the cluster
+  * When we create a service, without any additional config, Kubernetes creates a service that spans across all the nodes in the cluster and maps the target port to the same node port on all the nodes in the cluster. 
+  * This way you can access your application using the IP of any node in the cluster and using the same port number which in this case is 30008
+  * ![multiple-clusters-node-port](images/multiple-services-nodeport.jpg)
+
+* No matter what, service is created exactly the same. Making it highly flexible and adaptive. 
+
+### Cluster IP
+
+* May have a number of pods: 
+  * You may have a number of pods running a front end web server
+  * another set of pods running a back end web server. 
+  * Another set of PODs running a key-value store like Redis
+  * and another set of PODs running a persistent database like MySQL
+
+* Web front end server needs to communicate to the back end servers and redis server, etc.
+
+* Best way to establish connectivity between these services or tiers of application?
+  * Also know that the pods all have an IP address assigned to them as we can see on the screen. 
+  * But these IPs aren't static. so can't rely on those IP addresses for internal communication between the application. 
+  * A kubernetes service can help us group these PODs together and provide a single interface to access the pods in a group. 
+
+  * For example, a service created for the backend PODs will help group all the backend pods together and provide a single interface for other pods to access the service. 
+  * Requests are forwarded to one of the PODs under the service randomly. 
+  * Similarly create additional services for Redis and allow the backend parts to access the redis system
+  * Each layer can now scale or move as required without impacting communication between the various services. 
+  * Each service gets an IP name assigned to it inside the cluster and that is the name that should be used by other pods to access the service. 
+    * ![cluster-ip](images/Cluster-IP.jpg) 
+
+* Type of service is known as **cluster IP**
+
+#### Creation
+* `service-definition.yml`
+  ```yaml
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: back-end
+
+  spec:
+    type: ClusterIP ### The default type anyways
+    ports:
+      - targetPort: 80
+        port: 80 
+    
+    selector:
+      app: myapp
+      type: back-end
+
+  ```
+* can create service using `kubectl create -f service-definition.yml`
+* The service can be accessed by other PODs using the ClusterIP or the service name. 
+  * `kubectl get services`  
 
 
 
+## Imperitive Commands
+
+* `dry-run`: By default as soon as the command is run, the resource will be created. If you simply want to test your command , use the --dry-run option. This will not create the resource, instead, tell you weather the resource can be created and if your command is right.
+  
+* `-o yaml`: This will output the resource definition in YAML format on screen.
+
+### POD
+
+* **Create an NGINX Pod**
+  * `kubectl run --generator=run-pod/v1 nginx --image=nginx`
+* **Generate POD Manifest YAML file (`-o yaml`) Don't create it (`--dry-run`)**
+  * `kubectl run --generator=run-pod/v1 nginx --image=nginx --dry-run -o yaml`
+
+### Deployment
+
+* **Create a deployment**
+  * `kubectl create deployment --image=nginx nginx`
+* **Generate Deployment YAML file (-o yaml). Don't create it(--dry-run)**
+  * `kubectl create deployment --image=nginx nginx --dry-run -o yaml`
+* **Generate Deployment YAML file (-o yaml). Don't create it(--dry-run) with 4 Replicas (--replicas=4)**
+  * `kubectl run --generator=deployment/apps.v1 nginx --image=nginx --dry-run --replicas=4 -o yaml`
+    * The usage --generator=deployment/v1beta1 is deprecated as of Kubernetes 1.16. The recommended way is to use the kubectl create option instead.
+  * **NOTE:** kubectl create deployment does not have a `--replicas` option. You could first create it and then scale it using the `kubectl scale` command. 
+    * `kubectl create deployment --image=nginx nginx`
+    * `kubectl scale --replicas=x nginx` 
+      * This one is a maybe.. will try it out
+*  **Save it to a file - (If you need to modify or add some other details)**
+   *  `kubectl create deployment --image=nginx nginx --dry-run -o yaml > nginx-deployment.yaml`
+      *  You can then update the YAML file with the replicas or any other field before creating the deployment. 
+
+### Service
+
+  * **Create a Service named redis-service of type ClusterIP to expose pod redis on port 6379**
+    * `kubectl expose pod redis --port=6379 --name redis-service --dry-run -o yaml` This will auto use the pod's labels as selectors.
+    * OR `
 
 
 
-
+1. [Core Concepts](#core-concepts)
+   1. [Table of Contents](#table-of-contents)
+   2. [Cluster Architecture](#cluster-architecture)
+   3. [ETCD](#etcd)
+      1. [ETCD For Beginners](#etcd-for-beginners)
+      2. [ETCD in Kubernetes](#etcd-in-kubernetes)
+   4. [Kube-API Server](#kube-api-server)
+   5. [Kube Controller Manager](#kube-controller-manager)
+   6. [Kube Scheduler](#kube-scheduler)
+   7. [Kubelet](#kubelet)
+   8. [Kube Proxy](#kube-proxy)
+   9. [PODs](#pods)
+      1. [Recap](#recap)
+      2. [How to deploy Pods](#how-to-deploy-pods)
+      3. [PODs with YAML](#pods-with-yaml)
+      4. [Cluster IP](#cluster-ip)
+         1. [Creation](#creation)
+   10. [Imperitive Commands](#imperitive-commands)
+      1. [POD](#pod)
+      2. [Deployment](#deployment)
+      3. [Service](#service)
