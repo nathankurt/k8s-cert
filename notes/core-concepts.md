@@ -1,33 +1,43 @@
-Core Concepts
-=============
 
-## Table of Contents
 
-1. [Core Concepts](#core-concepts)
-   1. [Table of Contents](#table-of-contents)
-   2. [Cluster Architecture](#cluster-architecture)
-   3. [ETCD](#etcd)
+# Table of Contents
+
+1. [Table of Contents](#table-of-contents)
+2. [Core Concepts](#core-concepts)
+   1. [Cluster Architecture](#cluster-architecture)
+   2. [ETCD](#etcd)
       1. [ETCD For Beginners](#etcd-for-beginners)
       2. [ETCD in Kubernetes](#etcd-in-kubernetes)
-   4. [Kube-API Server](#kube-api-server)
-   5. [Kube Controller Manager](#kube-controller-manager)
-   6. [Kube Scheduler](#kube-scheduler)
-   7. [Kubelet](#kubelet)
-   8. [Kube Proxy](#kube-proxy)
-   9. [PODs](#pods)
+   3. [Kube-API Server](#kube-api-server)
+   4. [Kube Controller Manager](#kube-controller-manager)
+   5. [Kube Scheduler](#kube-scheduler)
+   6. [Kubelet](#kubelet)
+   7. [Kube Proxy](#kube-proxy)
+   8. [PODs](#pods)
       1. [Recap](#recap)
       2. [How to deploy Pods](#how-to-deploy-pods)
       3. [PODs with YAML](#pods-with-yaml)
       4. [Cluster IP](#cluster-ip)
          1. [Creation](#creation)
-   10. [Imperitive Commands](#imperitive-commands)
+   9. [Imperative Commands](#imperative-commands)
       1. [POD](#pod)
       2. [Deployment](#deployment)
       3. [Service](#service)
-      4. [Misc](#misc)
-2. [Scheduling](#scheduling)
+      4. [Misc.](#misc)
+3. [Scheduling](#scheduling)
    1. [Manual Scheduling](#manual-scheduling)
+      1. [Labels and Selectors](#labels-and-selectors)
+      2. [Creating Labels](#creating-labels)
+      3. [Selectors](#selectors)
+      4. [Annotations](#annotations)
+   2. [Taints and Tolerations](#taints-and-tolerations)
+      1. [Commands](#commands)
+4. [End Table of Contents](#end-table-of-contents)
 
+
+
+Core Concepts
+=============
 
 ## Cluster Architecture
 
@@ -48,8 +58,8 @@ Core Concepts
       * It identifies the right ship based on its size, its capacity, the number of containers already on the ship. and any other conditions such as the destination of the ship
       * *kube-scheduler*
 
-* Different offices in the dock that are assigned to speical tasks or departments
-    * ie. Operations team takes care ship handling, traffic control, etc. deal with issues related to damages, the routes take
+* Different offices in the dock that are assigned to special tasks or departments
+    * i.e. Operations team takes care ship handling, traffic control, etc. deal with issues related to damages, the routes take
     * Cargo team takes care of containers. When containers are damaged or destroyed, they make sure new containers are made available
     * Services office that takes care of the I.T and communications between different ships. 
 
@@ -61,14 +71,14 @@ Core Concepts
 
 * kube-apiserver is primary management component of kubernetes. 
   * Responsible for orchestrating all operations within the cluster. 
-  * exposes the Kubernetes API which is used by external users to perform mangement operations on the cluster as well as the various controllers to monitor the various state of the cluster and make the necesssary changes as required by the worker nodes to communicate with the server. and by the worker nodes to communicate with the server. 
+  * exposes the Kubernetes API which is used by external users to perform management operations on the cluster as well as the various controllers to monitor the various state of the cluster and make the necessary changes as required by the worker nodes to communicate with the server. and by the worker nodes to communicate with the server. 
 
 * Container Runtime Engine
   * Docker is a popular one
   * Not always docker though, could be things like container-d or rocket.
 
 * The captain of the ship. Every ship has one. Responsible for managing all activities on these ships
-  * Responsible for liasing with master ships starting with: 
+  * Responsible for liaising with master ships starting with: 
     * letting the master ship know that they are interested in joining the group
     * receiving the appropriate info about the containers to be loaded on the ship
     * and loading the appropriate containers as required
@@ -79,7 +89,7 @@ Core Concepts
   * Kube-api server periodically fetches status reports from kubelet to monitor the state of the nodes and containers on them
 
 * *Kube-proxy*: Applications on worker nodes need to be able to communicate with each other
-  * Ie you may have a web server running in a container on one node and a db server on the other node. 
+  * I.e. you may have a web server running in a container on one node and a db server on the other node. 
   * How would the web server reach the database server on the other node?
   * Kube-proxy service ensures that the necessary rules are in place on the worker nodes to allow the containers running on them to reach each other. 
 
@@ -89,7 +99,7 @@ Core Concepts
 ## ETCD
 
 ### ETCD For Beginners
-* *ETCD is a disbritued, reliable key-value store that is simple, secure, and fast*
+* *ETCD is a distributed, reliable key-value store that is simple, secure, and fast*
 * Key value store
   * A dictionary basically
   * Stores info in the form of documents or pages
@@ -133,13 +143,13 @@ Core Concepts
     * `kubectlexec etcd-master –n kube-systemetcdctlget / --prefix –keys-only`
 
 * ETCD in HA Environment
-  * You will have multiple master nodes in your cluster then you will have multiple ETCD instnaces spread across the master nodes
+  * You will have multiple master nodes in your cluster then you will have multiple ETCD instances spread across the master nodes
   * Set the right parameter `--initial-cluster controller-0=https://${CONTROLLER0_IP}:2380,controller-1=https://${CONTROLLER1_IP}:2380 \`
 
 ## Kube-API Server
 
 * When you run a kubectl command, the kubectl is reaching to the kube-apiserver
-  * Kubeapi server authenticates the request and validates it
+  * kube-api server authenticates the request and validates it
   * then retrieves the data from the etcd cluster and responds back with the requested info
 
 * don't really need to use kubectl. could instead invoke api directly by sending a post request
@@ -152,7 +162,7 @@ Core Concepts
     5. Scheduler
     6. Kubelet
    * Returns `Pod created!`
-     * API Server creates a POD object without assinging it to a node
+     * API Server creates a POD object without assigning it to a node
      * Updates the info in the ETCD server
      * Updates the user that the POD has been created
      * The scheduler continuously monitors the API Server and realizes there is a new pod with no node assigned
@@ -189,7 +199,7 @@ Core Concepts
   2. takes necessary actions to remediate the situation
 
 * *Controller* 
-  * A process that continuously monitors the state of various components within the system and works towards brigning the whole system to the desired functioning state
+  * A process that continuously monitors the state of various components within the system and works towards bringing the whole system to the desired functioning state
   * For example - Node Controller is responsible for monitoring the status of the Nodes and taking necessary actions to keep the nodes running.
 
 * Node controller checks the status of the nodes every 5 seconds    
@@ -215,7 +225,7 @@ Core Concepts
     * `kubectl get pods -n kube-system`
       * Deploys kube-controller-manager as a pod in the kube-system namespace on the master node. 
       * can view options with `cat /etc/kubernetes/manifests/kube-controller-manager.yaml`
-  * WIthout you can run `cat /etc/systemd/system/kube-controller-manager.service` 
+  * Without you can run `cat /etc/systemd/system/kube-controller-manager.service` 
 
 * See running processes with `ps -aux | grep kube-controller-manager`
 
@@ -227,12 +237,12 @@ Core Concepts
 
 * Why do you need a scheduler? 
   * want to make sure the right container ends up on the right ship. 
-  * Want to make sure contrainers are placed on right ship so they go to the right place. 
+  * Want to make sure containers are placed on right ship so they go to the right place. 
 
 * Scheduler looks at each pod and tries to find the best node for it. 
   * Two Phases:
     * First Phase - Filter Nodes:
-      * Filter out nodes that dont fit profile of pods ie. Nodes that don't have sufficient CPU and memory resources requested by the pod.
+      * Filter out nodes that don't fit profile of pods i.e. Nodes that don't have sufficient CPU and memory resources requested by the pod.
     * Second Phase - Rank Nodes: 
       * Uses a priority function to assign a score to the nodes on a scale of 0 to 10. That would be free on the nodes after placing the pod on them 
         * So whichever has more resources would be placed on. 
@@ -250,7 +260,7 @@ Core Concepts
 
 
 * Kublet in the kubernetes worker node, registers the node with the kubernetes cluster. 
-* When it recieves instructions to load a container or a POD on the node, it requests the container run time engine(docker) to pull required image and run an instance. 
+* When it receives instructions to load a container or a POD on the node, it requests the container run time engine(docker) to pull required image and run an instance. 
 * Kubelet then continues to monitor the state of the POD and the containers in it and reports to the kube-api server on a timely basis
 
 1. Register Node
@@ -271,9 +281,9 @@ Core Concepts
 * This is accomplished by deploying a POD networking solution to the cluster.
   * POD Network - an internal virtual network that spans across all the nodes in the cluster through which all the pods connect to. 
   * Many solution available to deploying such a network
-* Example: In this case, I have a web application deployed on the first node and a database aplication deployed on the second.
+* Example: In this case, I have a web application deployed on the first node and a database application deployed on the second.
   * Web app can reach the database by using the IP of the db pod. 
-  * No guaruntee that the ip of the database pod will always remain the same.
+  * No guarantee that the ip of the database pod will always remain the same.
   * Better way for web app to access the db is using a service. so we create a service to expose the db application across the cluster. 
   * The service cannot join the pod network because the service is not an actual thing. 
     * Not a container like pod so it doesn't have any interfaces or an actively listening process. virtual component that only lives in the kubernetes memory. 
@@ -292,7 +302,7 @@ Core Concepts
 
 ### Recap
 
-* WIth kubernetes, ultimate aim is to deploy our application in the form of containers on a set of machines that are configured as worker nodes in a cluster. 
+* With kubernetes, ultimate aim is to deploy our application in the form of containers on a set of machines that are configured as worker nodes in a cluster. 
 * Kubernetes does not deploy containers directly on worker nodes.
   * Instead the containers are encapsulated into a kubernetes object known as PODs.
   * **Pod:** Single instance of an application
@@ -310,7 +320,7 @@ Core Concepts
   * **Helper Container**
     * supporting task for our web app such as processing a user entered data processing a file uploaded by the user etc. and want helper containers to live alongside application container
       * In that case you can have both of these containers part of the same pod so that when a new application container is created, the helper is also created and when it dies, the helper also dies since they are part of the same pod. 
-      * The two containers can also communicate with each other directly by refering to each other as localhost. 
+      * The two containers can also communicate with each other directly by referring to each other as localhost. 
       * Can also share same storage space
 
 ### How to deploy Pods
@@ -324,7 +334,7 @@ Core Concepts
 ### PODs with YAML
 
 * YAML in kubernetes
-* pod-defintion.yml
+* pod-definition.yml
 * ```yaml
   apiVersion:
   kind: 
@@ -346,7 +356,7 @@ Core Concepts
     
 *  Metadata is a dictionary. number of spaces doesn't matter but they should stay the same since they are siblings
    * cannot add any other property that you want in metadata. 
- * For spec, refer to documentaion since there are plenty. With app that has a single container though, not too tough
+ * For spec, refer to documentation since there are plenty. With app that has a single container though, not too tough
   ```yaml
   spec:
     containers:
@@ -365,10 +375,10 @@ Core Concepts
 
 * Why do we need replica set
   * If something happens and pod fails, users will no longer be ale to access our application
-  * to prevent users from losing access to our app, we would like to have more than one insance or pod running at the same time. 
+  * to prevent users from losing access to our app, we would like to have more than one instance or pod running at the same time. 
   * Replication controller helps us run multiple instances of a single pod in the kubernetes cluster and providing high availability
 * Can you use replication controller if you plan on using a single pod? 
-  * **NO** Even if you havea single pod, the replication controller can help by automatically bringing up a new pod when the existing one fails. 
+  * **NO** Even if you have a single pod, the replication controller can help by automatically bringing up a new pod when the existing one fails. 
   * Thus the replication controller ensures that the specified number of parts are running at all times. 
 
 * Also need to create multiple pods to share load across them. 
@@ -378,7 +388,7 @@ Core Concepts
   * **Replication Controller** 
     * The older tech that's being replaced by replica set. 
   * **Replica Set** 
-    * New recomended way to set up replication
+    * New recommended way to set up replication
 
 ### Creating a Replication Controller
 
@@ -409,7 +419,7 @@ spec:
 
 ```
 * create template section under spec to provide a part template to be used by the replication controller
-  * move all the contents of the pod-defintion file except for the first few lines and put it in the rc-defintion file
+  * move all the contents of the pod-definition file except for the first few lines and put it in the rc-definition file
   * Replication controller is parent, pod definition is child
   * for replica count, add replicas tag to spec and input the number of replicas you'll need under it. 
   * then run `kubectl create -f rc-definition.yml`
@@ -450,10 +460,10 @@ spec:
 
 * Need to have the apps/ or you will get an error: unable to recognize replicaset
 * ReplicaSet needs `selector:` 
-* Can also manage parts that were nt created as part of the replica at creation
-  * ie. The reports created before the creation of the replica set that match labels specified in the selector.
+* Can also manage parts that were not created as part of the replica at creation
+  * i.e. The reports created before the creation of the replica set that match labels specified in the selector.
   * Replica set will also take those pods into consideration when creating the replicas. 
-* can still use `selector:` in replicacontroller but just assumes it is the same as the labels provided in the part defintion file
+* can still use `selector:` in replicacontroller but just assumes it is the same as the labels provided in the part definition file
 * Required for ReplicaSet and has to be written in form of matchLabels: 
   * Simply matches the labels specified under it to the labels on the pod. 
   * Replica set selector also provides many other options for matching labels that were not available in the replication controller
@@ -559,7 +569,7 @@ spec:
 
 * So far we've been doing everything in the default namespace. 
   * Created automatically when the cluster is first set up
-* When cluster is first set up, kubernetes creates a set of pods and services for its internal purpose such as those required by the networking solution, dns service. etc. to isolat them from the user to prevent you from accidentally deleting or modifying the services. 
+* When cluster is first set up, kubernetes creates a set of pods and services for its internal purpose such as those required by the networking solution, dns service. etc. to isolate them from the user to prevent you from accidentally deleting or modifying the services. 
   * Created under namespace *kube-system* 
 * *kube-public*
   * where resources that should be made available to all users are created. 
@@ -572,7 +582,7 @@ spec:
 
 ### Resource Limits
 
-  * You can also assign a quota of resources to each of these namespaces so it's guarunteed a certain amount and doesn't use more than it's allowed.
+  * You can also assign a quota of resources to each of these namespaces so it's guaranteed a certain amount and doesn't use more than it's allowed.
   * ![resource-limits](/images/resource-limits.jpg)
 
 ### DNS
@@ -662,10 +672,10 @@ spec:
       * Kubernetes Node has an IP address that is `192.168.1.2`
       * Laptop is on the same network as well so has IP address `192.168.1.10`
       * The internal POD network is in the range `10.244.0.0` and has an `IP 10.24.0.2`
-        * Clearly cannot ping or access the POD at address `10.244.0.2` since it's in a seperate network. 
+        * Clearly cannot ping or access the POD at address `10.244.0.2` since it's in a separate network. 
       
       * Things we could do: 
-        * SSH into the kubernetes node at `192.168.1.2` and then from the node, we would be able to access the POD's webpage by doing a curl. Or if the node has a GUI, we could fire up a browser and see the wepgae from `http://10.244.0.2`
+        * SSH into the kubernetes node at `192.168.1.2` and then from the node, we would be able to access the POD's webpage by doing a curl. Or if the node has a GUI, we could fire up a browser and see the webpage from `http://10.244.0.2`
           * ![external-service](/images/external-service.jpg)
         * That's not what we want though, we want to be able to access the webpage simply by accessing the IP of the kubernetes node. 
       
@@ -720,7 +730,7 @@ spec:
         type: front-end
    ```
 
- * When dones run `kubectl create -f service-definition.yml` to create
+ * When done run `kubectl create -f service-definition.yml` to create
  * `kubectl get services` to get the services that are running. 
    * Will give you a `CLUSTER-IP` IP and you can now access that IP using curl or web browser
      * `curl http://192.168.1.2:30008`
@@ -732,7 +742,7 @@ spec:
   * Service then automatically selects all the three pods as endpoints to forward the external requests. 
   * **NO ADDITIONAL CONFIG REQUIRED** 
 
-* What about when the web application is on pods in seperate nodes in the cluster
+* What about when the web application is on pods in separate nodes in the cluster
   * When we create a service, without any additional config, Kubernetes creates a service that spans across all the nodes in the cluster and maps the target port to the same node port on all the nodes in the cluster. 
   * This way you can access your application using the IP of any node in the cluster and using the same port number which in this case is 30008
   * ![multiple-clusters-node-port](/images/multiple-services-nodeport.jpg)
@@ -788,7 +798,7 @@ spec:
 
 
 
-## Imperitive Commands
+## Imperative Commands
 
 * `dry-run`: By default as soon as the command is run, the resource will be created. If you simply want to test your command , use the --dry-run option. This will not create the resource, instead, tell you weather the resource can be created and if your command is right.
   
@@ -842,11 +852,11 @@ spec:
     * Both the above commands have their own challenges. While create service cannot accept a selector the other cannot accept a node port. I would recommend going with the `kubectl expose` command. If you need to specify a node port, generate a definition file using the same command and manually input the nodeport before creating the service.
 
 
-### Misc
+### Misc.
 
   * Create a service of type ClusterIP with the port 6379, 
 
-  * **Create a deployment named webapp using the image kodekloud/webapp-color with 3 replicas**
+  * **Create a deployment named webapp using the image `kodekloud/webapp-color` with 3 replicas**
     * Create Deployment with `kubectl create deployment webapp --image=kodekloud/webapp-color`
       * Scale with `kubectl scale deployment.v1.apps/webapp --replicas=3`
   
@@ -900,7 +910,7 @@ spec:
     * Scheduler goes through all the pods and looks for those that don't have this property set. 
       * Those are the candidates for scheduling
     * Then identifies the right node for the POD by running the scheduling algorithm.
-    * Once identified, it schedules the pod on the node by setting the `nodeName` property to the name of the node by creating a binding objet.
+    * Once identified, it schedules the pod on the node by setting the `nodeName` property to the name of the node by creating a binding object.
     * ![how-scheduling-works](/images/how-scheduling-works.jpg)
 
 * If **No Scheduler**
@@ -929,33 +939,215 @@ spec:
         * `curl --header "Content-Type:application/json" --request POST --data '{"apiVersion":"v1", "kind": "Binding“ .... }'`
           * returns `http://$SERVER/api/v1/namespaces/default/pods/$PODNAME/binding/`
 
+### Labels and Selectors
+
+
+  * Best way to group things together and filter them based on your need is with Labels
+  * Labels are properties that you can add to each item for their class, kind, and color etc.
+    * Selectors help you filter these items.
+
+  * For each object attach labels as per your needs
+    * app, function, etc.
+  * Then while selecting, specify a condition to filter specific objects.
+    * `app = App1`
+
+### Creating Labels
+
+Specify Labels: you can add as many as you like
+  
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-webapp
+  ### Right Here
+  labels:
+    app: App1
+    function: Front-end
+  ####################
+spec:
+  containers:
+    - name: simple-webapp
+      image: simple-webapp
+      ports:
+        - containerPort: 8080
+
+```
+
+### Selectors
+
+* Select Pod(once the pod is created):
+  * `kubectl get pods --selector app=App1`
+    * If you want to select multiple pods, separate them with a comma but no spaces
+    * `kubectl get pods --selector env=prod,bu=finance,tier=frontend`
+
+* Kubernetes objects use labels and selectors internally to connect different objects together. 
+  * For example, to create a replicaset consisting of 3 different consisting of three different pods. 
+    * First label the pod definition and use selector in a replicaset to group the pods. 
+    ```yaml
+    apiVersion: apps/v1
+    kind: ReplicaSet
+    metadata:
+      name: simple-webapp
+      ### Labels here are labels of replicaset itself
+      labels:
+        app: App1
+        function: Front-end
+    spec:
+      replicas: 3
+      selector:
+        # match labels here
+        matchLabels:
+          app: App1
+      template:
+        metadata:
+          #### Labels defined here are
+          #### labels configured on the pods
+          labels:
+            app: App1
+            function: Front-end
+        spec:
+          containers:
+            name: simple-webapp
+            image: simple-webapp
+    ```
+    * Not too concerned with labels of replicaset right now because we are trying to get the replica set to discover the pods
+      * labels on replicaset will be used if you were to configure some other object to discover the replica set. 
+    
+    * In order to connect the replica set to the pod,we configure the `selector` field under the replicaset spec to match the labels defined on the pod.  
+      * a single label will do if it matches correctly
+      * However, if you feel there could be other pods with same label but different function, then you could specify both the labels to ensure that the right pods are discovered by the replica set
+    * On creation, if the labels match, the replica set is created successfully. 
+
+### Annotations
+
+* Used to record other details for informatory purposes  
+  * i.e. tool details: name, version, build information etc.
+  * contact details, phone numbers, email ids etc. that may be used for some kind of integration purpose. 
+
+`replicaset-definition.yaml`
+```yaml
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: simple-webapp
+  labels:
+    app: App1
+    function: Front-end
+  #New thing here
+  annotations:
+    buildversion: 1.3
+  ################
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: App1
+  template:
+    metadata:
+      labels:
+        app: App1
+        function: Front-end
+    spec:
+      containers:
+        name: simple-webapp
+        image: simple-webapp
+```
+
+## Taints and Tolerations
+
+* Bug approaching a person analogy
+  * To prevent bugs from landing on a person, we spray the person with bug spray(**Taint**).
+  * The bug is intolerant to the smell. So when approaching the person, the taint applied on the person throws the bug off.
+    * However there could be other bugs that are tolerant to the smell and so the taint doesn't really affect them and end up landing on the person. 
+  * Two things that decide if a bug can land on a person:
+    1. The Taint of the person
+    2. The bug's toleration level to that particular taint
+
+Back to Kubernetes...
+* The person is a node and the taints are pods
+* Taints and tolerations are used to set restrictions on what parts can be scheduled. 
+
+**Example**
+* Start with a cluster with three worker nodes named `one` `two` and `three`
+* Also have a set of pods that are to be deployed on these nodes, `A`,`B`,`C`, and `D`
+* When the pods are created, kubernetes scheduler tries to place these parts on the available worker nodes.
+  * When no restrictions, scheduler balances the pods across all of the nodes to balance them out equally. 
+  * ![scheduler-no-restrictions](/images/scheduler-no-restrictions.jpg)
+
+
+* Now lets assume that we have dedicated resources on `Node 1` for a particular use case or application.
+  * So we would like only pods that belong to application to be placed on `Node 1`
+* First we prevent all pods from being placed on the Node by placing a taint on the Node.
+  * call it `blue`
+* By default pods have no tolerations
+  * Unless specified otherwise, none of the parts can tolerate any taint. 
+    * Right now, no pods can be placed on `Node 1` because none of them can tolerate the taint, `blue`
+* Next we must specify which pods are tolerant to particular taint.
+  * We want only pod `D` to be able to be placed in `Node 1`
+  * We give Pod `D` a toleration to blue
+* Pod `D` is now tolerant to blue so when the scheduler tries to place this part on `Node 1`, it goes through. 
+* Here's how it would work now.
+  1. Scheduler tries to place `Pod A` on `Node 1`, but because taint, is thrown off and placed on `node 2`
+  2. Scheduler tries to place `Pod B` on `Node 1`, thrown off again because taint. placed on next free node, which is `Node 3`
+  3. Scheduler tries to place `Pod C` on `Node 1`, thrown off again and placed on `node 2`
+  4. Scheduler tires to place `Pod D` on `Node 1`, since it's tolerant it accepts and is placed. 
+  ![taint-tolerant](/images/taint-tolerant.jpg)
+
+* **Remember:**
+  * _Taints_ are set on _Nodes_
+  * _Tolerants_ are set on _Pods_
+
+### Commands
+
+* Add Taint
+  * `kubectl taint nodes node-name key=value:taint-effect`
+    * specify name of node to taint 
+    * followed by taint itself, which is a key value pair. 
+    * Then taint-effect(what happens to pods that do not tolerate this taint)
+      * Three effects: 
+        1. `NoSchedule`:
+           * Pods will not be scheduled on Node
+        2. `PreferNoScheduler`:
+           * System will try to avoid placing pod on node, but not guaranteed
+        3. `NoExecute`:
+           * New pods will not be scheduled on node and existing pods will be evicted
+    * `kubectl taint nodes node1 app=blue:NoSchedule`
 
 
 
 
 
 
-1. [Core Concepts](#core-concepts)
-   1. [Table of Contents](#table-of-contents)
-   2. [Cluster Architecture](#cluster-architecture)
-   3. [ETCD](#etcd)
+# End Table of Contents
+1. [Table of Contents](#table-of-contents)
+2. [Core Concepts](#core-concepts)
+   1. [Cluster Architecture](#cluster-architecture)
+   2. [ETCD](#etcd)
       1. [ETCD For Beginners](#etcd-for-beginners)
       2. [ETCD in Kubernetes](#etcd-in-kubernetes)
-   4. [Kube-API Server](#kube-api-server)
-   5. [Kube Controller Manager](#kube-controller-manager)
-   6. [Kube Scheduler](#kube-scheduler)
-   7. [Kubelet](#kubelet)
-   8. [Kube Proxy](#kube-proxy)
-   9. [PODs](#pods)
+   3. [Kube-API Server](#kube-api-server)
+   4. [Kube Controller Manager](#kube-controller-manager)
+   5. [Kube Scheduler](#kube-scheduler)
+   6. [Kubelet](#kubelet)
+   7. [Kube Proxy](#kube-proxy)
+   8. [PODs](#pods)
       1. [Recap](#recap)
       2. [How to deploy Pods](#how-to-deploy-pods)
       3. [PODs with YAML](#pods-with-yaml)
       4. [Cluster IP](#cluster-ip)
          1. [Creation](#creation)
-   10. [Imperitive Commands](#imperitive-commands)
+   9. [Imperative Commands](#imperative-commands)
       1. [POD](#pod)
       2. [Deployment](#deployment)
       3. [Service](#service)
-      4. [Misc](#misc)
-2. [Scheduling](#scheduling)
+      4. [Misc.](#misc)
+3. [Scheduling](#scheduling)
    1. [Manual Scheduling](#manual-scheduling)
+      1. [Labels and Selectors](#labels-and-selectors)
+      2. [Creating Labels](#creating-labels)
+      3. [Selectors](#selectors)
+      4. [Annotations](#annotations)
+   2. [Taints and Tolerations](#taints-and-tolerations)
+      1. [Commands](#commands)
+4. [End Table of Contents](#end-table-of-contents)
