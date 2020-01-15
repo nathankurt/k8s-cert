@@ -26,6 +26,7 @@ Core Concepts
       3. [Service](#service)
       4. [Misc](#misc)
 2. [Scheduling](#scheduling)
+   1. [Manual Scheduling](#manual-scheduling)
 
 
 ## Cluster Architecture
@@ -870,6 +871,64 @@ spec:
 # Scheduling
 
 
+## Manual Scheduling
+
+* What do you do when you don't have a scheduler in your cluster? 
+  * don't want to rely on the built in scheduler and want to schedule the pods yourself. 
+
+* How does it work? 
+    * start with `pod-definition.yaml`
+    * ```yaml
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: nginx
+        labels:
+          name: nginx
+      spec:
+        containers:
+          - name: nginx
+            image: nginx
+            ports:
+              - containerPort: 8080
+         ### Not set by default
+        nodeName:
+         ###########
+      ```
+    * Every pod has a field called `NodeName` that, by default is not set.
+    * don't typically specify it since kubernetes does it automatically. 
+    * Scheduler goes through all the pods and looks for those that don't have this property set. 
+      * Those are the candidates for scheduling
+    * Then identifies the right node for the POD by running the scheduling algorithm.
+    * Once identified, it schedules the pod on the node by setting the `nodeName` property to the name of the node by creating a binding objet.
+    * ![how-scheduling-works](/images/how-scheduling-works.jpg)
+
+* If **No Scheduler**
+  * Pods continue to be in pending state
+  * So you can manually assign pods to nodes yourself
+    * Set `nodeName` field to name of node yourself 
+       ![manual-schedule](/images/manual-schedule.jpg)
+    * Can only specify node name at creation time. 
+
+  * **What if Pod is already created and you want to assign the pod to a node?**
+    * kubernetes doesn't allow you to edit the nodeName property of a pod
+    * So create a `binding object` and send a post request to the pod binding API, thus mimicking what the actual scheduler does. 
+    * `pod-bind-definition.yaml`
+    * ```yaml
+      apiVersion: v1
+      kind: Binding
+      metadata:
+        name: nginx
+      target: #NEW STUFF
+        apiVersion: v1
+        kind: Node
+        name: node02
+      ```
+    * Then send a post request to the pods binding API with the data set to the binding object in a JSON format. 
+      * Must convert the YAML file into its equivalent JSON format. 
+        * `curl --header "Content-Type:application/json" --request POST --data '{"apiVersion":"v1", "kind": "Binding“ .... }'`
+          * returns `http://$SERVER/api/v1/namespaces/default/pods/$PODNAME/binding/`
+
 
 
 
@@ -899,3 +958,4 @@ spec:
       3. [Service](#service)
       4. [Misc](#misc)
 2. [Scheduling](#scheduling)
+   1. [Manual Scheduling](#manual-scheduling)
