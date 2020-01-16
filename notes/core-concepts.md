@@ -1,7 +1,6 @@
 
 
 # Table of Contents
-
 1. [Table of Contents](#table-of-contents)
 2. [Core Concepts](#core-concepts)
    1. [Cluster Architecture](#cluster-architecture)
@@ -17,21 +16,38 @@
       1. [Recap](#recap)
       2. [How to deploy Pods](#how-to-deploy-pods)
       3. [PODs with YAML](#pods-with-yaml)
+   9. [ReplicaSets](#replicasets)
+      1. [Creating a Replication Controller](#creating-a-replication-controller)
+      2. [Creating a ReplicaSet](#creating-a-replicaset)
+      3. [Labels and Selectors](#labels-and-selectors)
+   10. [Deployments](#deployments)
+      1. [What is a Deployment](#what-is-a-deployment)
+      2. [Definition](#definition)
+   11. [Helpful Pod Commands](#helpful-pod-commands)
+   12. [Namespaces](#namespaces)
+      1. [Basics](#basics)
+      2. [Resource Limits](#resource-limits)
+      3. [DNS](#dns)
+      4. [Commands](#commands)
+   13. [Services](#services)
+      1. [Services Use Case](#services-use-case)
+      2. [Service Types - Basics](#service-types---basics)
+      3. [NodePort](#nodeport)
       4. [Cluster IP](#cluster-ip)
          1. [Creation](#creation)
-   9. [Imperative Commands](#imperative-commands)
+   14. [Imperative Commands](#imperative-commands)
       1. [POD](#pod)
       2. [Deployment](#deployment)
       3. [Service](#service)
       4. [Misc.](#misc)
 3. [Scheduling](#scheduling)
    1. [Manual Scheduling](#manual-scheduling)
-      1. [Labels and Selectors](#labels-and-selectors)
+      1. [Labels and Selectors](#labels-and-selectors-1)
       2. [Creating Labels](#creating-labels)
       3. [Selectors](#selectors)
       4. [Annotations](#annotations)
    2. [Taints and Tolerations](#taints-and-tolerations)
-      1. [Commands](#commands)
+      1. [Commands](#commands-1)
       2. [Master Nodes](#master-nodes)
    3. [Node Selectors](#node-selectors)
       1. [Limitations](#limitations)
@@ -39,8 +55,15 @@
       1. [Node Affinity Types](#node-affinity-types)
    5. [Node Affinity Vs Taints and Tolerations](#node-affinity-vs-taints-and-tolerations)
    6. [Resource Requirements and Limits](#resource-requirements-and-limits)
-4. [End Table of Contents](#end-table-of-contents)
-
+      1. [Resource Limits](#resource-limits-1)
+   7. [Daemon Sets](#daemon-sets)
+      1. [Use Case](#use-case)
+      2. [Creation](#creation-1)
+4. [Quick Notes](#quick-notes)
+   1. [Editing Pods and Deployments](#editing-pods-and-deployments)
+      1. [Edit a POD](#edit-a-pod)
+      2. [Edit Deployments](#edit-deployments)
+5. [End Table of Contents](#end-table-of-contents)
 
 
 Core Concepts
@@ -340,92 +363,92 @@ Core Concepts
 
 ### PODs with YAML
 
-* YAML in kubernetes
-* pod-definition.yml
-* ```yaml
-  apiVersion:
-  kind: 
-  metadata:
+  * YAML in kubernetes
+  * pod-definition.yml
+  * ```yaml
+      apiVersion:
+      kind: 
+      metadata:
 
-  spec:
-  ```
-* all required fields!!
-  * `apiVersion: v1` could also be `apps/v1`
-  * kind could be `POD`, `Service`, `ReplicaSet`, `Deployment`
-  * **metadata**:
+      spec:
+    ```
+*  all required fields!!
+    * `apiVersion: v1` could also be `apps/v1`
+    * kind could be `POD`, `Service`, `ReplicaSet`, `Deployment`
+    * **metadata**:
     * ```yaml
-      metadata: 
-        name: myapp-pod
-        labels: 
-            app: myapp
-            type: front-end   
-      ```
-    
-*  Metadata is a dictionary. number of spaces doesn't matter but they should stay the same since they are siblings
-   * cannot add any other property that you want in metadata. 
- * For spec, refer to documentation since there are plenty. With app that has a single container though, not too tough
-  ```yaml
-  spec:
-    containers:
-      - name: nginx-container
-        image: nginx
-  ```
-  * dash(-) indicates that it is a list and first item in the list. 
- * when yaml is made, run `kubectl create -f pod-definition.yml`
- * Delete pod with `kubectl delete myapp-pod`
- * Once pod is created, run `kubectl get pods` to view pods available.
-   * to see detailed info about pod run `kubectl describe pod myapp-pod` 
-
+        metadata: 
+          name: myapp-pod
+          labels: 
+              app: myapp
+              type: front-end   
+        ```
+      
+  * Metadata is a dictionary. number of spaces doesn't matter but they should stay the same since they are siblings
+     * cannot add any other property that you want in metadata. 
+     * For spec, refer to documentation since there are plenty. With app that has a single container though, not too tough
+     * ```yaml
+        spec:
+          containers:
+          - name: nginx-container
+            image: nginx
+        ```
+    * dash(-) indicates that it is a list and first item in the list. 
+    * when yaml is made, run `kubectl create -f pod-definition.yml`
+    * Delete pod with `kubectl delete myapp-pod`
+    * Once pod is created, run `kubectl get pods` to view pods available.
+    * to see detailed info about pod run `kubectl describe pod myapp-pod` 
+ 
 ## ReplicaSets
 
-* They are the processes that monitor kubernetes objects and respond accordingly. 
+   * They are the processes that monitor kubernetes objects and respond accordingly. 
+  
+   * Why do we need replica set
+     * If something happens and pod fails, users will no longer be ale to access our application
+     * to prevent users from losing access to our app, we would like to have more than one instance or pod running at the same time. 
+     * Replication controller helps us run multiple instances of a single pod in the kubernetes cluster and providing high availability
+   * Can you use replication controller if you plan on using a single pod? 
+     * **NO** Even if you have a single pod, the replication controller can help by automatically bringing up a new pod when the existing one fails. 
+     * Thus the replication controller ensures that the specified number of parts are running at all times. 
 
-* Why do we need replica set
-  * If something happens and pod fails, users will no longer be ale to access our application
-  * to prevent users from losing access to our app, we would like to have more than one instance or pod running at the same time. 
-  * Replication controller helps us run multiple instances of a single pod in the kubernetes cluster and providing high availability
-* Can you use replication controller if you plan on using a single pod? 
-  * **NO** Even if you have a single pod, the replication controller can help by automatically bringing up a new pod when the existing one fails. 
-  * Thus the replication controller ensures that the specified number of parts are running at all times. 
+   * Also need to create multiple pods to share load across them. 
+   * ![replication-controller](/images/replication-controller.jpg)
 
-* Also need to create multiple pods to share load across them. 
-* ![replication-controller](/images/replication-controller.jpg)
-
-* Two similar terms for when the demand increases both have same purpose but not the same. 
-  * **Replication Controller** 
-    * The older tech that's being replaced by replica set. 
-  * **Replica Set** 
-    * New recommended way to set up replication
+   * Two similar terms for when the demand increases both have same purpose but not the same. 
+     * **Replication Controller** 
+       * The older tech that's being replaced by replica set. 
+     * **Replica Set** 
+       * New recommended way to set up replication
 
 ### Creating a Replication Controller
 
-`rc-definition.yml`
-```yaml
-apiVersion: v1
-kind: ReplicationController
-metadata:
-  name: myapp-rc
-  labels:
-    app: myapp
-    type: front-end
+   * `rc-definition.yml`
+   * ```yaml
+      apiVersion: v1
+      kind: ReplicationController
+      metadata:
+        name: myapp-rc
+        labels:
+          app: myapp
+          type: front-end
 
-spec:
-  template:
-    metadata:
-      name: myapp-pod
-      labels:
-        app: myapp
-        type: front-end
-    spec:
-      containers:
-        - name: nginx-container
-          image: nginx
-  
-  replicas: 3
+      spec:
+        template:
+          metadata:
+            name: myapp-pod
+            labels:
+              app: myapp
+              type: front-end
+          spec:
+            containers:
+              - name: nginx-container
+                image: nginx
+        
+        replicas: 3
 
 
-```
-* create template section under spec to provide a part template to be used by the replication controller
+        ```
+  * create template section under spec to provide a part template to be used by the replication controller
   * move all the contents of the pod-definition file except for the first few lines and put it in the rc-definition file
   * Replication controller is parent, pod definition is child
   * for replica count, add replicas tag to spec and input the number of replicas you'll need under it. 
@@ -568,6 +591,7 @@ spec:
 
 ## Namespaces
 
+
 ### Basics
 
 * Two boys named Mark, to address each other, they use last names. 
@@ -705,56 +729,56 @@ spec:
 
 ### NodePort
 
-* Three ports involved:
- * Port on the POD where the actual web server is running is **80**
-   * Also referred to as the **targetPort**
- * Port on the service itself is just called the **Port**
-   * Terms are from the viewpoint of the service.
- * Port on the node itself is running on 300008
-   * **NodePort** 
-   * Port range from `30000 - 32767`
-* ![NodePort](/images/Service-NodePort.jpg)
+   * Three ports involved:
+    * Port on the POD where the actual web server is running is **80**
+      * Also referred to as the **targetPort**
+    * Port on the service itself is just called the **Port**
+      * Terms are from the viewpoint of the service.
+    * Port on the node itself is running on 300008
+      * **NodePort** 
+      * Port range from `30000 - 32767`
+   * ![NodePort](/images/Service-NodePort.jpg)
 
-* How to create service
- * `service-definition.yml`
- * ```yaml
-    apiVersion: v1
-    kind: Service
-    metadata:
-      name: myapp-service
-      ### Can Have Label but don't need that
-    
-    spec:
-      type: NodePort
-      ports:
-        - targetPort: 80 #an array
-          port: 80 #Only mandatory field
-          nodePort: 30008
-      selector:
-        #provide a list of labels and pull values
-        #from that in pod metadata section
-        app: myapp
-        type: front-end
-   ```
+   * How to create service
+    * `service-definition.yml`
+    * ```yaml
+       apiVersion: v1
+       kind: Service
+       metadata:
+         name: myapp-service
+         ### Can Have Label but don't need that
+       
+       spec:
+         type: NodePort
+         ports:
+           - targetPort: 80 #an array
+             port: 80 #Only mandatory field
+             nodePort: 30008
+         selector:
+           #provide a list of labels and pull values
+           #from that in pod metadata section
+           app: myapp
+           type: front-end
+      ```
 
- * When done run `kubectl create -f service-definition.yml` to create
- * `kubectl get services` to get the services that are running. 
-   * Will give you a `CLUSTER-IP` IP and you can now access that IP using curl or web browser
-     * `curl http://192.168.1.2:30008`
+    * When done run `kubectl create -f service-definition.yml` to create
+    * `kubectl get services` to get the services that are running. 
+      * Will give you a `CLUSTER-IP` IP and you can now access that IP using curl or web browser
+        * `curl http://192.168.1.2:30008`
 
-* What do you do when you have multiple pods? 
-  * We have multiple similar pods running our web application. they all have the same labels with a key app and set to value `myapp`
-    * same label is used as a selector during the creation of the service. 
-  * So when service is created, it looks for a matching pod with the label and finds three of them
-  * Service then automatically selects all the three pods as endpoints to forward the external requests. 
-  * **NO ADDITIONAL CONFIG REQUIRED** 
+   * What do you do when you have multiple pods? 
+     * We have multiple similar pods running our web application. they all have the same labels with a key app and set to value `myapp`
+       * same label is used as a selector during the creation of the service. 
+     * So when service is created, it looks for a matching pod with the label and finds three of them
+     * Service then automatically selects all the three pods as endpoints to forward the external requests. 
+     * **NO ADDITIONAL CONFIG REQUIRED** 
 
-* What about when the web application is on pods in separate nodes in the cluster
-  * When we create a service, without any additional config, Kubernetes creates a service that spans across all the nodes in the cluster and maps the target port to the same node port on all the nodes in the cluster. 
-  * This way you can access your application using the IP of any node in the cluster and using the same port number which in this case is 30008
-  * ![multiple-clusters-node-port](/images/multiple-services-nodeport.jpg)
+   * What about when the web application is on pods in separate nodes in the cluster
+     * When we create a service, without any additional config, Kubernetes creates a service that spans across all the nodes in the cluster and maps the target port to the same node port on all the nodes in the cluster. 
+     * This way you can access your application using the IP of any node in the cluster and using the same port number which in this case is 30008
+     * ![multiple-clusters-node-port](/images/multiple-services-nodeport.jpg)
 
-* No matter what, service is created exactly the same. Making it highly flexible and adaptive. 
+   * No matter what, service is created exactly the same. Making it highly flexible and adaptive. 
 
 ### Cluster IP
 
@@ -1205,37 +1229,37 @@ Back to Kubernetes...
   * Can't do it at all. 
 
 ## Node Affinity
-* Primary purpose is to ensure pods are hosted on particular nodes. 
-  * like ensure large processing pod ends up on `large node1`
-  * Can provide advanced capabilities to limit pod placement on specific nodes.
-  * Much more complex though.
-* `pod-definition.yml`
-* ```yaml
-  apiVersion:
-  kind:
-     ## SAME AS PREVIOUS nodeSelector One
-  metadata:
-    name: myapp-pod
-  spec:
+  * Primary purpose is to ensure pods are hosted on particular nodes. 
+    * like ensure large processing pod ends up on `large node1`
+    * Can provide advanced capabilities to limit pod placement on specific nodes.
+    * Much more complex though.
+  * `pod-definition.yml`
+    * ```yaml
+      apiVersion:
+      kind:
+        ## SAME AS PREVIOUS nodeSelector One
+      metadata:
+        name: myapp-pod
+      spec:
 
-    containers:
-      - name: data-processor
-        image: data-processor
-    affinity:
-      nodeAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          nodeSelectorTerms:
-            - matchExpressions:
-              - key: size
-                #For doing the advanced stuff, 
-                operator: In #NotIn will match the node with a size not set to large. 
-                # operator: Exists will just check if label exists and don't need values.
-                # There are more but check docs. 
-                values:
-                  - Large
-                  # - Medium to add value
-  ```
-  
+        containers:
+          - name: data-processor
+            image: data-processor
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+                - matchExpressions:
+                  - key: size
+                    #For doing the advanced stuff, 
+                    operator: In #NotIn will match the node with a size not set to large. 
+                    # operator: Exists will just check if label exists and don't need values.
+                    # There are more but check docs. 
+                    values:
+                      - Large
+                      # - Medium to add value
+      ```
+      
   * What if someone changes the label on the node at a future point in time? Will pod continue to stay on Node? 
     * Answered by long `requiredDuringSchedulingIgnoredDuringExecution` which is affinity types
 
@@ -1350,14 +1374,133 @@ Back to Kubernetes...
             resources:
               requests:
                 memory: "1Gi" #Gi instead of GB because they are hipsters i guess
+                #set to 1gb of memory and 1 count of vCPU
                 cpu: 1 
             ##################
          ```
+        * What does one count of CPU mean? 
+          * Can specify any value as low as `0.1`
+            * Can also be expressed as `100m`
+            * can go as low as `1m` but not lower than that. 
+          * 1 count of CPU is equivalent to 1 vCPU. 
+            * 1 AWS vCPU
+            * 1 GCP Core
+            * 1 Azure Core
+            * 1 Hyperthread
+        * Can request a higher number of CPUs for the container, provided your nodes are sufficiently funded.
+          * 1 G (Gigabyte)  = 1,000,000,000 bytes
+          * 1 M (Megabyte)  = 1,000,000 bytes
+          * 1 K (Kilobyte)  = 1,000 bytes
+          
+          * 1 Gi (Gibibyte) = 1,073,741,824 bytes
+          * 1 Mi (Mebibyte) = 1,048,576 bytes
+          * 1 Ki (Kibibyte) = 1,024 bytes  
+
+### Resource Limits
+
+* Look at container running on a node
+  * In the docker world, a docker container has no limit to the amount of resources it can consume.
+  * Say a container starts with 1 vCPU on a Node, it can go up and consume as much resources as it requires
+    * Suffocates the native processes on the node or other containers
+    * Can set a limit for the resource usage on these pods by default. 
+
+* By default, kubernetes sets a limit of 1vCPU to containers. 
+  * if you don't specify explicitly, a container will be limited to consume only one vCPU on a node. 
+  * Same goes with memory. Kubernetes sets a limit of **512 Mi** on containers
+* If you don't like default limits, you can change them by adding a limit section under the resources 
+  ```yaml
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: 1
+     #set limits here
+    limits:
+      memory: "2Gi"
+      cpu: 2
+  ```
+  * When pod is created, kubernetes sets new limits for the container
+    * **LIMITS ARE SET PER CONTAINER, NOT PER POD**
+* What happens when a pod tries to exceed resources beyond specified limit?
+  * CPU
+    * Kubernetes **throttles CPU** so it doesn't go beyond specified limits
+      * A container can't use more CPU than it's limit
+  * Memory
+    * Container can use more memory resources than its limit. 
+    * If a pod tries to consume more memory than it's limit constantly, pod is **Terminated**
+
+## Daemon Sets
+
+* Daemon sets are like replica sets. 
+  * helps you deploy multiple instance of your pod. 
+  * Runs one copy of your pod on each node in your cluster. 
+  * Whenever a new node is added to the cluster, a replica is automatically added to the node. 
+    * When a node is removed the pod is automatically removed. 
+* **Daemon set ensures that one copy of the pod is always present in all nodes in the cluster.**
+
+### Use Case
+  * Say you would like to deploy a monitoring agent or log collector on each of your nodes in the cluster to monitor your cluster better.
+    * Daemon set is prefect for that since it can deploy your monitoring agent in the form of a pod in all the nodes in your cluster
+    * don't have to worry about adding or removing monitoring nodes in your cluster. 
+    * ![daemon-set-use-case](/images/Daemon-Set-Use.jpg)
+
+  * **Kube-Proxy Use Case** 
+    * We know that kube-proxy is required on every node in the cluster. 
+    * kube-proxy component can be deployed as the daemon set in cluster
+  
+  * **Networking**
+    * Weave-net is a good use case since it's required on every node in the cluster. 
+
+### Creation
+* Similar to replicaset-definition
+`daemon-set-definition.yaml`
+```yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: monitoring-daemon
+spec:
+
+```
 
 
 
 
 
+
+
+
+
+# Quick Notes
+
+## Editing Pods and Deployments
+  
+  ### Edit a POD
+
+  * You cannot edit specifications of an existing pod _other_ than these
+    * `spec.containers[*].image`
+    * `spec.initContainers[*].image`
+    * `spec.activeDeadlineSeconds`
+    * `spec.tolerations`
+  * You cannot edit the environment variables, service accounts, resource limits, of a running pod. if you really want to though, there are two options
+    1. `kubectl edit pod <pod name>` 
+      * will open the pod specification in vim, then edit the required properties. When you try to save it, you will be denied. this is because you are attempting to edit a field on the pod that is not editable. 
+      * A copy of the file with your changes is saved in a tempory location as shown above.
+      * `kubectl delete pod <pod name>`
+      * Then create a new pod with your changes using the temporary file
+        * `kubectl create -f /tmp/kubectl-edit-ccvrq.yaml`
+    2. Extract the pod definition in YAML format
+       * `kubectl get pod webapp -o yaml > my-new-pod.yaml`
+       * Make changes to exported file using an editor
+         * `vim my-new-pod.yaml`
+       * Then delete existing pod
+         * `kubectl delete pod webapp`
+       * then create a new pod with the edited file
+         * `kubectl create -f my-new-pod.yaml`  
+  ### Edit Deployments
+    * You can easily edit any field/property of the pod template
+      * Since the pod template is a child of the deployment specification, with every change the new deployment will automatically delete and create a new pod with the new changes. 
+      * If you are asked to edit a property of a POD part of a deployment can simply run this command.
+        * `kubectl edit deployment my-deployment`
 
 
 
@@ -1383,21 +1526,38 @@ Back to Kubernetes...
       1. [Recap](#recap)
       2. [How to deploy Pods](#how-to-deploy-pods)
       3. [PODs with YAML](#pods-with-yaml)
+   9. [ReplicaSets](#replicasets)
+      1. [Creating a Replication Controller](#creating-a-replication-controller)
+      2. [Creating a ReplicaSet](#creating-a-replicaset)
+      3. [Labels and Selectors](#labels-and-selectors)
+   10. [Deployments](#deployments)
+      1. [What is a Deployment](#what-is-a-deployment)
+      2. [Definition](#definition)
+   11. [Helpful Pod Commands](#helpful-pod-commands)
+   12. [Namespaces](#namespaces)
+      1. [Basics](#basics)
+      2. [Resource Limits](#resource-limits)
+      3. [DNS](#dns)
+      4. [Commands](#commands)
+   13. [Services](#services)
+      1. [Services Use Case](#services-use-case)
+      2. [Service Types - Basics](#service-types---basics)
+      3. [NodePort](#nodeport)
       4. [Cluster IP](#cluster-ip)
          1. [Creation](#creation)
-   9. [Imperative Commands](#imperative-commands)
+   14. [Imperative Commands](#imperative-commands)
       1. [POD](#pod)
       2. [Deployment](#deployment)
       3. [Service](#service)
       4. [Misc.](#misc)
 3. [Scheduling](#scheduling)
    1. [Manual Scheduling](#manual-scheduling)
-      1. [Labels and Selectors](#labels-and-selectors)
+      1. [Labels and Selectors](#labels-and-selectors-1)
       2. [Creating Labels](#creating-labels)
       3. [Selectors](#selectors)
       4. [Annotations](#annotations)
    2. [Taints and Tolerations](#taints-and-tolerations)
-      1. [Commands](#commands)
+      1. [Commands](#commands-1)
       2. [Master Nodes](#master-nodes)
    3. [Node Selectors](#node-selectors)
       1. [Limitations](#limitations)
@@ -1405,4 +1565,12 @@ Back to Kubernetes...
       1. [Node Affinity Types](#node-affinity-types)
    5. [Node Affinity Vs Taints and Tolerations](#node-affinity-vs-taints-and-tolerations)
    6. [Resource Requirements and Limits](#resource-requirements-and-limits)
-4. [End Table of Contents](#end-table-of-contents)
+      1. [Resource Limits](#resource-limits-1)
+   7. [Daemon Sets](#daemon-sets)
+      1. [Use Case](#use-case)
+      2. [Creation](#creation-1)
+4. [Quick Notes](#quick-notes)
+   1. [Editing Pods and Deployments](#editing-pods-and-deployments)
+      1. [Edit a POD](#edit-a-pod)
+      2. [Edit Deployments](#edit-deployments)
+5. [End Table of Contents](#end-table-of-contents)
