@@ -61,6 +61,8 @@
    7. [Daemon Sets](#daemon-sets)
       1. [Use Case](#use-case)
       2. [Creation](#creation-1)
+      3. [How it works](#how-it-works)
+   8. [Static Pods](#static-pods)
 4. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -1475,10 +1477,34 @@ spec:
 
 ```
 
+* View daemonsets with 
+  * `kubectl get daemonsets`
+  * `kubectl describe daemonsets`
+
+### How it works
+  * How does it schedule each node and how does it ensure that every node has a pod? 
+    * Ways to schedule a pod on each node in the cluster. 
+      * we could set `nodeName` property on pod to bypass scheduler and get pod placed on node directly 
+        * How it used to be until kubernetes version v1.12
+      * Now it uses NodeAffinity and default scheduler   
 
 
 
+## Static Pods
 
+  * Normally kubelet relies on the kube-apiserver for instructions on what PODs to load on its node
+    * Based on a decision made by the scheduler that was stored in the etcd data store. 
+  
+  * What if there was no kube-apiserver, and no kube-scheduler and no controllers and no etcd cluster? 
+    * No master at all
+  
+  
+  * Kubelet(captain of ship) can manage a node independently
+    * no kubernetes cluster so there are no Kube API server or anything like that.
+    * One thing kubelet know how to do is create pods. 
+      * BUT we don't have an api server here to provide pod details. 
+    * to create a pod, you need the details of the pod in a pod definition file. 
+      * But how do you provide a pod definition file to the kubelet without the kube-api-server? 
 
 
 
@@ -1585,6 +1611,8 @@ spec:
    7. [Daemon Sets](#daemon-sets)
       1. [Use Case](#use-case)
       2. [Creation](#creation-1)
+      3. [How it works](#how-it-works)
+   8. [Static Pods](#static-pods)
 4. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
