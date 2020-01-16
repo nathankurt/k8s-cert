@@ -29,6 +29,8 @@
       2. [Resource Limits](#resource-limits)
       3. [DNS](#dns)
       4. [Commands](#commands)
+         1. [Create Namespace Like](#create-namespace-like)
+         2. [Create a Resource Quota](#create-a-resource-quota)
    13. [Services](#services)
       1. [Services Use Case](#services-use-case)
       2. [Service Types - Basics](#service-types---basics)
@@ -649,7 +651,7 @@ spec:
           - name: nginx-container
             image: nginx
       ```
-  * Create Namespace Like
+  #### Create Namespace Like
    `namespace-dev.yml`
     ```yaml
     apiVersion: v1
@@ -665,7 +667,7 @@ spec:
     * `kubectl get pods --all-namespaces`
   
 
-  * Create a Resource Quota
+  #### Create a Resource Quota
     * ```yaml
       apiVersion: v1
       kind: ResurceQuota
@@ -1459,8 +1461,20 @@ kind: DaemonSet
 metadata:
   name: monitoring-daemon
 spec:
+  selector:
+    matchLabels:
+      app: monitoring-agent
+  template:
+    metadata:
+      labels:
+        app: monitoring-agent
+    spec:
+      containers:
+        - name: monitoring-agent
+          image: monitoring-agent
 
 ```
+
 
 
 
@@ -1539,6 +1553,8 @@ spec:
       2. [Resource Limits](#resource-limits)
       3. [DNS](#dns)
       4. [Commands](#commands)
+         1. [Create Namespace Like](#create-namespace-like)
+         2. [Create a Resource Quota](#create-a-resource-quota)
    13. [Services](#services)
       1. [Services Use Case](#services-use-case)
       2. [Service Types - Basics](#service-types---basics)
