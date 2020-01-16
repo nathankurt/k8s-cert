@@ -1498,7 +1498,7 @@ spec:
   * You cannot edit the environment variables, service accounts, resource limits, of a running pod. if you really want to though, there are two options
     1. `kubectl edit pod <pod name>` 
       * will open the pod specification in vim, then edit the required properties. When you try to save it, you will be denied. this is because you are attempting to edit a field on the pod that is not editable. 
-      * A copy of the file with your changes is saved in a tempory location as shown above.
+      * A copy of the file with your changes is saved in a temporary location as shown above.
       * `kubectl delete pod <pod name>`
       * Then create a new pod with your changes using the temporary file
         * `kubectl create -f /tmp/kubectl-edit-ccvrq.yaml`
