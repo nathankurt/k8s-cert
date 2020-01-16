@@ -1,7 +1,7 @@
 # k8s-cert
 
 ## Notes
-For Notes, start [Here!](/notes/Core-Concepts.md). 
+For Notes, start [In the Notes Folder!](/notes)
 
 ## Review
 
