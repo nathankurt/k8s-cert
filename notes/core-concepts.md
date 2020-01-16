@@ -34,7 +34,11 @@
       1. [Commands](#commands)
       2. [Master Nodes](#master-nodes)
    3. [Node Selectors](#node-selectors)
+      1. [Limitations](#limitations)
    4. [Node Affinity](#node-affinity)
+      1. [Node Affinity Types](#node-affinity-types)
+   5. [Node Affinity Vs Taints and Tolerations](#node-affinity-vs-taints-and-tolerations)
+   6. [Resource Requirements and Limits](#resource-requirements-and-limits)
 4. [End Table of Contents](#end-table-of-contents)
 
 
@@ -1156,7 +1160,7 @@ Back to Kubernetes...
       * `kubectl describe node kubemaster | grep Taint`
     * To remove taint from master which has the effect of NoSchedule:
       * `kubectl taint nodes master node-role.kubernetes.io/master:NoSchedule-`
-ok
+
 
 ## Node Selectors
 
@@ -1169,7 +1173,198 @@ ok
   * In the current default setup, any pods can go to any nodes. 
     * So data processing pod, could very well end up on lower-end nodes which is not desired. 
 
+  * To solve, we can set a limitation on the pods so that they only run on particular nodes. 
+    * With **Node Selectors**
+      * `pod-definition.yml`
+        * ```yaml
+          apiVersion:
+          kind:
+          metadata:
+            name: myapp-pod
+          spec:
+            containers:
+              - name: data-processor
+                image: data-processor
+             # New Property to add
+            nodeSelector:
+              #key value pair of size:large are labels the pod use. 
+              #to use labels in nodeSelector, must have first labeled nodes
+              #prior to creating pod
+              size: Large # need to go and make that. 
+          ```
+            * `kubectl create -f pod-definition.yml`
+
+      * **Label Nodes**
+        * `kubectl label nodes <node-name> <label-key>=<label-value>`
+        * i.e. `kubectl label nodes node-1 size=Large`
+
+### Limitations
+  * If you want something more complex like
+    * Place the pods on Large or Medium
+    * Place the pods on any nodes that are not small.
+  * Can't do it at all. 
+
 ## Node Affinity
+* Primary purpose is to ensure pods are hosted on particular nodes. 
+  * like ensure large processing pod ends up on `large node1`
+  * Can provide advanced capabilities to limit pod placement on specific nodes.
+  * Much more complex though.
+* `pod-definition.yml`
+* ```yaml
+  apiVersion:
+  kind:
+     ## SAME AS PREVIOUS nodeSelector One
+  metadata:
+    name: myapp-pod
+  spec:
+
+    containers:
+      - name: data-processor
+        image: data-processor
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+              - key: size
+                #For doing the advanced stuff, 
+                operator: In #NotIn will match the node with a size not set to large. 
+                # operator: Exists will just check if label exists and don't need values.
+                # There are more but check docs. 
+                values:
+                  - Large
+                  # - Medium to add value
+  ```
+  
+  * What if someone changes the label on the node at a future point in time? Will pod continue to stay on Node? 
+    * Answered by long `requiredDuringSchedulingIgnoredDuringExecution` which is affinity types
+
+### Node Affinity Types
+  * Defines the behavior of the scheduler with respect to node affinity and the stages in the lifecycle of the pod. 
+  * Currently two types but plan to offer more. 
+    * `requiredDuringSchedulingIgnoredDuringExecution`
+    * `preferredDuringSchedulingIgnoredDuringExecution`
+    * **Planned Release**: `requiredDuringSchedulingRequiredDuringExecution`
+
+
+    * There are two states in the lifecycle of a pod when considering node affinity. 
+      * `During scheduling`
+        * The state where a pod does not exist and is created for the first time
+        * No doubt that when a pod is first created, the affinity rules specified are considered to place the pod on the right node.
+        
+        
+         * If you select the required type(`requiredDuringSchedulingIgnoredDuringExecution`), the scheduler will mandate that the pod be placed on a node with the given affinity rules
+          * If it can't find one, the pod will not be scheduled.
+          * Used where placement of pods is crucial.  
+        * If you select the preferred type(`preferredDuringSchedulingIgnoredDuringExecution`), the scheduler will simply ignore node affinity rules and place the pod on any available node
+          * Way of telling the scheduler, "try you're best to place the pod on the matching node, but if you can't find one, just place it anywhere."  
+  
+      * `During Execution`
+        * the state where a pod has been running and a change is made in the environment that affects node affinity such as a change in the label of a node.
+          * For example, say admin removed the label we said earlier called `size=large` from the node. 
+          * What happens to pods running on the node?
+            * Currently, both affinity's are set to ignored
+              * Pods will continue to run and any changes in node affinity will not impact them once they are scheduled. 
+            * Planned new types will allow for `required` during execution
+              * pod running on the large node will be evicted or terminated if the label `large` is removed.
+ 
+
+**Node Affinity Types Chart**
+
+  |         | DuringScheduling | During Execution |
+  | ------: | ---------------: | ---------------: |
+  |  Type 1 |         Required |          Ignored |
+  |  Type 2 |        Preferred |          Ignored |
+  | Type 3* |         Required |         Required |
+
+  * *Type 3 is planned but not a thing yet*
+ 
+
+  **Get Pods and which node they are assigned to command**
+    * `kubectl get pod -o=custom-columns=NODE:.spec.nodeName,NAME:.metadata.name | sort`
+   
+
+## Node Affinity Vs Taints and Tolerations
+
+* Start with an exercise
+  * Three nodes and three pods each in three colors, `blue`,`red`, and `green`
+  * Goal is to place the blue pod in blue node, red pod in red node, etc.
+  * Sharing the same kubernetes cluster with other teams so there are other pods in the cluster as well as other nodes.
+    * We don't want any other pod to be placed on their nodes. 
+    * Neither do we want our pods to be placed on their nodes
+    * ![affinity-example-diagram](/images/affinity-example.jpg)
+  
+  
+  * **Start by Trying to Solve with Taints and Tolerations**
+    *  apply a taint to nodes, marking them with their colors
+       *  blue, red, and green. 
+    *  Set toleration on the pod to tolerate the respective colors when the parts are now created.
+       *  Nodes ensure they only accept the pod with the right toleration. 
+       *  Doesn't guarantee that nodes won't land in the other.
+       *  ![Taint-Failed-Solution](/images/taint-failed-solution.jpg)
+   
+  *  **Try Now with Node Affinity**
+      * Label Nodes with their respective colors, then set node selectors on the pods to tie the pod to the node.
+        * This **doesn't** guarantee that other nodes won't land in our nodes though
+        * ![Node-Affinity-Failed](/images/node-affinity-failed.jpg)  
+        
+    * **Taints/Tolerations and Node Affinity**
+      * Can be used together to completely dedicate nodes for specific pods.  
+        * First use taints and toleration to prevent other pods from being placed on our nodes.
+        * Then node affinity to make sure that our pods get placed in the correct node.
+        * ![Node-Taint](/images/node-affinity-failed.jpg)
+
+
+## Resource Requirements and Limits
+  
+  
+* Look at 3 Node Kubernetes cluster. 
+ * Each node has a set of CPU, Memory and Disk resources available. 
+ * Every pod consumes a set of resources
+   * In this case 2 CPUs, one Memory and some disk space. 
+   * Whenever a pod is placed on a Node, it consumes resources available to that node. 
+* Kubernetes scheduler that decides which nodes a pod goes to, considers resources required by a POD 
+* If scheduler has no sufficient resources, the scheduler avoids placing the POD on that node and instead places the POD on one where sufficient resources are available.
+ * If no sufficient resources, kubernetes holds back scheduling the node and you will see the pod in a pending state. 
+   * If you look at the events, you will see the reason - like `insufficient cpu`.
+* By default, kubernetes assumes that a pod or container with a pod requires `.5 CPU` & `256Mb of memory`
+  * Known as the **Resource Request** for a container. 
+    * Minimum amount of CPU or memory requested by the container.
+      * When the scheduler tries to place the pod on a node, uses these numbers to identify a node that has sufficient amount of resources available.
+      * If you know your app will need more, you can specify them in pod or deployment definition file. 
+         `pod-defintion.yaml`
+         ```yaml
+         apiVersion: v1
+         kind: Pod
+         metadata:
+          name: simple-webapp-color
+          labels:
+            name: simple-webapp-color
+        spec:
+          containers:
+          - name: simple-webapp-color
+            image: simple-webapp-color
+            ports:
+              - containerPort: 8080
+            ### Resources Thing 
+            resources:
+              requests:
+                memory: "1Gi" #Gi instead of GB because they are hipsters i guess
+                cpu: 1 
+            ##################
+         ```
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # End Table of Contents
@@ -1205,5 +1400,9 @@ ok
       1. [Commands](#commands)
       2. [Master Nodes](#master-nodes)
    3. [Node Selectors](#node-selectors)
+      1. [Limitations](#limitations)
    4. [Node Affinity](#node-affinity)
+      1. [Node Affinity Types](#node-affinity-types)
+   5. [Node Affinity Vs Taints and Tolerations](#node-affinity-vs-taints-and-tolerations)
+   6. [Resource Requirements and Limits](#resource-requirements-and-limits)
 4. [End Table of Contents](#end-table-of-contents)
