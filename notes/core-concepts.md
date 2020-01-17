@@ -76,12 +76,19 @@
 4. [Logging and Monitoring](#logging-and-monitoring)
    1. [Monitor Cluster Components](#monitor-cluster-components)
       1. [Heapster vs Metrics Server](#heapster-vs-metrics-server)
-5. [Quick Notes](#quick-notes)
+      2. [Metrics Server -- Getting Started](#metrics-server----getting-started)
+   2. [Managing Application Logs](#managing-application-logs)
+      1. [Logs - Docker](#logs---docker)
+      2. [Logs - Kubernetes](#logs---kubernetes)
+5. [Application Lifecycle Management](#application-lifecycle-management)
+   1. [Rolling Updates and Rollbacks](#rolling-updates-and-rollbacks)
+6. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
       2. [Edit Deployments](#edit-deployments)
    2. [Check for Port Clashing](#check-for-port-clashing)
-6. [End Table of Contents](#end-table-of-contents)
+   3. [Create all the files in a folder](#create-all-the-files-in-a-folder)
+7. [End Table of Contents](#end-table-of-contents)
 
 
 Core Concepts
@@ -1735,8 +1742,80 @@ spec:
     * Only an **In-Memory** monitoring solution. 
       * can not see historical performance data
   * How are metrics generated for the PODs on these nodes? 
+    * runs an agent on each node(kubelet) from the kubernetes API master server and running PODs on the nodes. 
+    * kubelet also contains a subcomponent known as `cAdvisor` or Container Advisor.
+      * responsible for retrieving performance metrics from pods and exposing them through the kubelet API to make the metrics available for the Metrics Server.  
+        * if you are using `minikube` for your local cluster. 
+
+### Metrics Server -- Getting Started
+  * minikube - `minikube addons enable metrics-server`
+  * Others - `git clone https://github.com/kubernetes-incubator/metrics-server.git`
+    * `kubectl create -f deploy/1.8+/`
+     ```
+      clusterrolebinding"metrics-server:system:auth-delegator" created
+      rolebinding"metrics-server-auth-reader" created
+      apiservice"v1beta1.metrics.k8s.io" created
+      serviceaccount"metrics-server" created
+      deployment "metrics-server" created
+      service "metrics-server" created
+      clusterrole"system:metrics-server" created
+      clusterrolebinding"system:metrics-server" created
+    ```
+  * **Metrics View**
+    * `kubectl top node`
+      * provides the CPU and memory consumption of each of the nodes. 
+    * `kubectl top pod`
+      * provides view of performance metrics of pods in kubernetes.
+    ![metrics-server-view](/images/metrics-server-view.jpg)
+      
+
+## Managing Application Logs
+
+### Logs - Docker
+  * `docker run kodekloud/event-simulator`
+    * All event simulator does is generate random events simulating a web server.
+      * streamed to standard output by the application
+    * ![docker-logs-run](/images/docker-logs-run.jpg)
+  *  Run container in background using `-d` option, wouldn't see the logs
+     * `docker run -d kodekloud/event-simulator`
+     * if you want to view logs, you can use the `docker logs` command, then container id.
+        * `-docker logs -f ecf`
+        * `-f` option helps us see the live log trail. 
+
+### Logs - Kubernetes
+
+* Create pod `event-simulator.yaml`
+
+```yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  name: event-simulator-pod
+spec:
+  containers:
+    - name: event-simulator
+      image: kodekloud/event-simulator
+    
+    - name: image-processor
+      image: some-image-processor
+```
+
+* `kubectl create -f event-simulator.yaml`
+* `kubectl logs -f event-simulator-pod event-simulator`
+  * `-f` option streams events live as if they were from docker. 
+  * logs are specific to container running inside the pod. 
+  * If multiple containers within a pod, you must specify the name of the container explicitly.
 
 
+# Application Lifecycle Management
+
+## Rolling Updates and Rollbacks
+
+* Try to understand rollouts and versioning in a deployment when you first create a deployment. 
+
+* When you first create a deployment, it triggers a **rollout**
+  * new rollout creates a new deployment revision(we'll call it `revision 1`)
+  * When application is upgraded, meaning new container version is updated to a new one a new rollout is triggered and a new deployment revision is created named `revision 2`. 
 
 # Quick Notes
 
@@ -1777,7 +1856,10 @@ spec:
   * `netstat 10253` - unused so use that.  
 
 
+## Create all the files in a folder
 
+* `kubectl create -f .`
+  * just add the `.` in there to use it as a wildcard, `*` doesn't work 
 
 
 
@@ -1857,9 +1939,16 @@ spec:
 4. [Logging and Monitoring](#logging-and-monitoring)
    1. [Monitor Cluster Components](#monitor-cluster-components)
       1. [Heapster vs Metrics Server](#heapster-vs-metrics-server)
-5. [Quick Notes](#quick-notes)
+      2. [Metrics Server -- Getting Started](#metrics-server----getting-started)
+   2. [Managing Application Logs](#managing-application-logs)
+      1. [Logs - Docker](#logs---docker)
+      2. [Logs - Kubernetes](#logs---kubernetes)
+5. [Application Lifecycle Management](#application-lifecycle-management)
+   1. [Rolling Updates and Rollbacks](#rolling-updates-and-rollbacks)
+6. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
       2. [Edit Deployments](#edit-deployments)
    2. [Check for Port Clashing](#check-for-port-clashing)
-6. [End Table of Contents](#end-table-of-contents)
+   3. [Create all the files in a folder](#create-all-the-files-in-a-folder)
+7. [End Table of Contents](#end-table-of-contents)

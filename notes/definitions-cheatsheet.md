@@ -21,6 +21,7 @@
       1. [Kube Scheduler](#kube-scheduler)
       2. [Custom Scheduler](#custom-scheduler)
       3. [Use Custom Scheduler](#use-custom-scheduler)
+   19. [Event-Simulator](#event-simulator)
 
 # Definitions
 
@@ -499,3 +500,26 @@ spec:
   schedulerName: my-custom-scheduler
 ```
 More Info [here](/notes/core-concepts.md/#use-custom-scheduler)
+
+
+## Event-Simulator
+
+* Create pod `event-simulator.yaml`
+
+```yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  name: event-simulator-pod
+spec:
+  containers:
+    - name: event-simulator
+      image: kodekloud/event-simulator
+    
+    - name: image-processor
+      image: some-image-processor
+```
+
+
+More Info [here](/notes/core-concepts.md/#logs---kubernetes)
+
