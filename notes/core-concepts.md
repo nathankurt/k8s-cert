@@ -75,6 +75,7 @@
    10. [Configuring Kubernetes Scheduler](#configuring-kubernetes-scheduler)
 4. [Logging and Monitoring](#logging-and-monitoring)
    1. [Monitor Cluster Components](#monitor-cluster-components)
+      1. [Heapster vs Metrics Server](#heapster-vs-metrics-server)
 5. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -1707,7 +1708,33 @@ spec:
 
 ## Monitor Cluster Components
 
+* Like to know node level metrics
+  * number of nodes in the cluster
+  * how many are healthy
+  * performance metrics such as CPU, memory, network and disk utilization
+* POD level metrics
+  * number of pods
+  * performance metrics of each pod such as CPU and memory consumption on them
 
+* Kubernetes does not come with a full featured built-in monitoring solution 
+  * number of open-source solutions available
+    * `Metrics Server`
+    * `Prometheus`
+    * `Elastic Stack` 
+  * Proprietary
+    * `Datadog`
+    * `Dynatrace` 
+
+   ![monitor-overview](/images/monitor-kubernetes-overview.jpg)
+  
+### Heapster vs Metrics Server
+  * Heapster was OG
+    * now it's deprecated :(
+  * Metrics server is slimmed down version 
+    * Retrieves metrics from each of the kubernetes nodes and pods. aggregates them, and stores them in memory. 
+    * Only an **In-Memory** monitoring solution. 
+      * can not see historical performance data
+  * How are metrics generated for the PODs on these nodes? 
 
 
 
@@ -1737,11 +1764,11 @@ spec:
          * `kubectl delete pod webapp`
        * then create a new pod with the edited file
          * `kubectl create -f my-new-pod.yaml`  
-  ### Edit Deployments
-    * You can easily edit any field/property of the pod template
-      * Since the pod template is a child of the deployment specification, with every change the new deployment will automatically delete and create a new pod with the new changes. 
-      * If you are asked to edit a property of a POD part of a deployment can simply run this command.
-        * `kubectl edit deployment my-deployment`
+### Edit Deployments
+ * You can easily edit any field/property of the pod template
+   * Since the pod template is a child of the deployment specification, with every change the new deployment will automatically delete and create a new pod with the new changes. 
+   * If you are asked to edit a property of a POD part of a deployment can simply run this command.
+     * `kubectl edit deployment my-deployment`
 
 ## Check for Port Clashing
 * When changing default port(like when you make a custom scheduler), make sure to check if the port is free.
@@ -1829,6 +1856,7 @@ spec:
    10. [Configuring Kubernetes Scheduler](#configuring-kubernetes-scheduler)
 4. [Logging and Monitoring](#logging-and-monitoring)
    1. [Monitor Cluster Components](#monitor-cluster-components)
+      1. [Heapster vs Metrics Server](#heapster-vs-metrics-server)
 5. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
