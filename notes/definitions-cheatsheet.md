@@ -17,6 +17,10 @@
    15. [Resource Requirements](#resource-requirements)
    16. [Resource Limits](#resource-limits)
    17. [Daemon Sets](#daemon-sets)
+   18. [Deploy Additional Scheduler - -kubeadm](#deploy-additional-scheduler----kubeadm)
+      1. [Kube Scheduler](#kube-scheduler)
+      2. [Custom Scheduler](#custom-scheduler)
+      3. [Use Custom Scheduler](#use-custom-scheduler)
 
 # Definitions
 
@@ -429,3 +433,69 @@ spec:
 More Info [here](/notes/core-concepts.md/#daemon-sets)
 
 
+## Deploy Additional Scheduler - -kubeadm
+
+### Kube Scheduler
+* `/etc/kubernetes/manifests/kube-scheduler.yaml`
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-scheduler
+  namespace: kube-system
+spec:
+  containers:
+  # Command and associated options to start the scheduler
+  - command:
+    - kube-scheduler
+    - --address=127.0.0.1
+    - --kubeconfig=/etc/kubernetes/scheduler.conf
+    #used when you have multiple copies of the scheduler running on different master nodes.
+    - --leader-elect=true
+    ################################################################
+    image: k8s.gcr.io/kube-scheduler-amd64:v1.11.3
+    name: kube-scheduler   
+``` 
+
+### Custom Scheduler
+`my-custom-scheduler.yaml`
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: my-custom-scheduler
+  namespace: kube-system
+spec:
+  containers:
+  # Command and associated options to start the scheduler
+  - command:
+    - kube-scheduler
+    - --address=127.0.0.1
+    - --kubeconfig=/etc/kubernetes/scheduler.conf
+    #used when you have multiple copies of the scheduler running on different master nodes. 
+    #picks which will lead scheduling activities when multiple copies of same scheduler are running
+    - --leader-elect=true 
+    ######################################### 
+    - --scheduler-name=my-custom-scheduler
+    #to differentiate custom scheduler from default during leader election process 
+    - --lock-object-name=my-custom-scheduler  
+    image: k8s.gcr.io/kube-scheduler-amd64:v1.11.3
+    name: kube-scheduler   
+``` 
+
+More Info [here](/notes/core-concepts.md/#deploy-additional-scheduler---kubeadm)
+
+### Use Custom Scheduler
+`pod-definition.yaml`
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+    - image: nginx
+      name: nginx
+  schedulerName: my-custom-scheduler
+```
+More Info [here](/notes/core-concepts.md/#use-custom-scheduler)

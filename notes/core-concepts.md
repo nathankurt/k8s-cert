@@ -67,11 +67,20 @@
       2. [Static PODs vs DaemonSets](#static-pods-vs-daemonsets)
       3. [Delete Static Pods on other nodes](#delete-static-pods-on-other-nodes)
    9. [Multiple Schedulers](#multiple-schedulers)
-4. [Quick Notes](#quick-notes)
+      1. [Deploy Additional Scheduler](#deploy-additional-scheduler)
+         1. [Deploy Additional Scheduler - Kubeadm](#deploy-additional-scheduler---kubeadm)
+         2. [View Schedulers](#view-schedulers)
+         3. [Use Custom Scheduler](#use-custom-scheduler)
+      2. [View Scheduler Logs and Events](#view-scheduler-logs-and-events)
+   10. [Configuring Kubernetes Scheduler](#configuring-kubernetes-scheduler)
+4. [Logging and Monitoring](#logging-and-monitoring)
+   1. [Monitor Cluster Components](#monitor-cluster-components)
+5. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
       2. [Edit Deployments](#edit-deployments)
-5. [End Table of Contents](#end-table-of-contents)
+   2. [Check for Port Clashing](#check-for-port-clashing)
+6. [End Table of Contents](#end-table-of-contents)
 
 
 Core Concepts
@@ -1575,12 +1584,128 @@ spec:
 
 ## Multiple Schedulers
 
+* What if none of the default schedulers satisfy your needs?
+  * Say you have a specific application that requires its components to be placed on nodes after performing some additional checks.
+  * Decide to make own scheduling algorithm to place pods on nodes and can add your own custom conditions and checks in it. 
+    * You can write your own kubernetes scheduler program, package it and deploy it as the default scheduler
+    * or as an additional scheduler in the kubernetes cluster 
+      * This way all the other apps can go through default, but one specific app can go through your custom scheduler. 
+      * ![multiple-scheduler-ships](/images/multiple-scheduler-ships.jpg)
+
+  ### Deploy Additional Scheduler
+  * Download kube-scheduler binary, then run it as a service with a set of options
+    * `wget https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kube-scheduler`
+    * One of the options is `--scheduler-name` if not specified assumed to be `default-scheduler`
+  * To deploy additional scheduler, you man use same kube-scheduler binary or use one that you may have built yourself
+    * This time set the scheduler name to a custom name. important to differentiate the two schedulers. 
+
+  #### Deploy Additional Scheduler - Kubeadm 
+
+  * Deploys scheduler as a pod, you can find the definition file it uses under the manifests folder.
+  * `/etc/kubernetes/manifests/kube-scheduler.yaml`
+  ```yaml
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    name: kube-scheduler
+    namespace: kube-system
+  spec:
+    containers:
+    - command:
+      - kube-scheduler
+      - --address=127.0.0.1
+      - --kubeconfig=/etc/kubernetes/scheduler.conf
+      - --leader-elect=true
+      image: k8s.gcr.io/kube-scheduler-amd64:v1.11.3
+      name: kube-scheduler   
+  ``` 
+
+  * **Custom Scheduler:**
+  * `my-custom-scheduler.yaml`
+  ```yaml
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    name: my-custom-scheduler
+    namespace: kube-system
+  spec:
+    containers:
+    # Command and associated options to start the scheduler
+    - command:
+      - kube-scheduler
+      - --address=127.0.0.1
+      - --kubeconfig=/etc/kubernetes/scheduler.conf
+      #used when you have multiple copies of the scheduler running on different master nodes. 
+      #picks which will lead scheduling activities when multiple copies of same scheduler are running
+      - --leader-elect=true 
+      ######################################### 
+      #############
+      # Can also use - --port= command
+      #############
+      - --scheduler-name=my-custom-scheduler
+      #to differentiate custom scheduler from default during leader election process 
+      - --lock-object-name=my-custom-scheduler  
+
+      image: k8s.gcr.io/kube-scheduler-amd64:v1.11.3
+      name: kube-scheduler   
+  ```  
+  * `--leader-elect` flag: Used when you have multiple copies of the scheduler running on different master nodes. 
+    * in a high availability setup where you have multiple master nodes with the kube-scheduler process running on both of them
+    * If multiple copies of the same scheduler are running on different nodes, only one can be active at a time. 
+    * `leader-elect` option helps to choose which will lead scheduling activities
+  * To get multiple schedulers working you must either set `--leader-elect=false` if you don't have multiple masters
+    * if you do have multiple masters, you can pass in an additional parameter to set a `--lock-object-name`
+  
+  * create with `kubectl create -f ` command 
+
+  #### View Schedulers
+  * View schedulers with
+    * `kubectl get pods --namespace=kube-system` and look for new custom scheduler. 
+    * ![view-schedulers-command](/images/view-schedulers-command.jpg)
+
+  #### Use Custom Scheduler
+  * Configure pod or deployment to use custom scheduler
+  * `pod-deployment.yaml` 
+    ```yaml
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: nginx
+    spec:
+      containers:
+        - image: nginx
+          name: nginx
+      schedulerName: my-custom-scheduler
+    ```
+  * This way when pod is created, the right scheduler picks it up to schedule
+  * Create pod using `kubectl create` command.
+    * If scheduler was **not** configured correctly, pod will continue to remain in `Pending` state.
+    * If everything is good, pod will be in `Running` state
+
+### View Scheduler Logs and Events
+
+* How do you know which scheduler picked it up? 
+  * View the events using the `kubectl get events` command. 
+    * Lists all the events in the current namespace
+    * Look for `Scheduled` events(under the `REASON` column) and make sure `SOURCE` is `my-custom-scheduler`
+    * ![view-scheduler-events](/images/view-scheduler-events.jpg)
+
+* **View Logs**
+  * To view logs of the pod use `kubectl logs [scheduler-name] --name-space=kube-system`
+    * `kubectl logs my-custom-scheduler -n kube-system`
+    * ![view-scheduler-logs](/images/view-scheduler-logs.jpg)
+
+## Configuring Kubernetes Scheduler
+
+* We saw how to setup scheduler manually and how kubeadm tool does it
+* We saw how to create additional schedulers and have PODs pick the new scheduler
+* Looked at some of the options
+  * Scheduler name and pod name used while configuring the scheduler. 
 
 
+# Logging and Monitoring
 
-
-
-
+## Monitor Cluster Components
 
 
 
@@ -1618,8 +1743,11 @@ spec:
       * If you are asked to edit a property of a POD part of a deployment can simply run this command.
         * `kubectl edit deployment my-deployment`
 
-
-
+## Check for Port Clashing
+* When changing default port(like when you make a custom scheduler), make sure to check if the port is free.
+  * `netstat 10251` - output it's in use
+  * `netstat 10252` - output it's in use
+  * `netstat 10253` - unused so use that.  
 
 
 
@@ -1693,8 +1821,17 @@ spec:
       2. [Static PODs vs DaemonSets](#static-pods-vs-daemonsets)
       3. [Delete Static Pods on other nodes](#delete-static-pods-on-other-nodes)
    9. [Multiple Schedulers](#multiple-schedulers)
-4. [Quick Notes](#quick-notes)
+      1. [Deploy Additional Scheduler](#deploy-additional-scheduler)
+         1. [Deploy Additional Scheduler - Kubeadm](#deploy-additional-scheduler---kubeadm)
+         2. [View Schedulers](#view-schedulers)
+         3. [Use Custom Scheduler](#use-custom-scheduler)
+      2. [View Scheduler Logs and Events](#view-scheduler-logs-and-events)
+   10. [Configuring Kubernetes Scheduler](#configuring-kubernetes-scheduler)
+4. [Logging and Monitoring](#logging-and-monitoring)
+   1. [Monitor Cluster Components](#monitor-cluster-components)
+5. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
       2. [Edit Deployments](#edit-deployments)
-5. [End Table of Contents](#end-table-of-contents)
+   2. [Check for Port Clashing](#check-for-port-clashing)
+6. [End Table of Contents](#end-table-of-contents)
