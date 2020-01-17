@@ -63,6 +63,10 @@
       2. [Creation](#creation-1)
       3. [How it works](#how-it-works)
    8. [Static Pods](#static-pods)
+      1. [Why Use These?](#why-use-these)
+      2. [Static PODs vs DaemonSets](#static-pods-vs-daemonsets)
+      3. [Delete Static Pods on other nodes](#delete-static-pods-on-other-nodes)
+   9. [Multiple Schedulers](#multiple-schedulers)
 4. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -1432,6 +1436,8 @@ Back to Kubernetes...
     * Container can use more memory resources than its limit. 
     * If a pod tries to consume more memory than it's limit constantly, pod is **Terminated**
 
+
+
 ## Daemon Sets
 
 * Daemon sets are like replica sets. 
@@ -1505,6 +1511,76 @@ spec:
       * BUT we don't have an api server here to provide pod details. 
     * to create a pod, you need the details of the pod in a pod definition file. 
       * But how do you provide a pod definition file to the kubelet without the kube-api-server? 
+        * You can configure the kubelet to read the pod definition files from a directory on the server designated to store information about pods. 
+        * kubelet periodically checks this directory (`/etc/kubernetes/manifests` by default)
+          * Reads these files and then creates pods on the host. 
+          * Ensures the pod stays alive
+          * If you make a change to any file within the directory kubelet recreates the pod for those changes to take effect. 
+          * If you remove a file from dir, pod is auto deleted. 
+          * These are called **static pods**
+    * **NOTE:** Can only create pods this way, cannot create replicasets or deployments or services by placing a definition file in the folder. 
+
+
+    * Folder can be any directory on the host. and the location of that dir is passed in to the kubelet as an option while running the service. 
+    * ![kubelet-service-manifest-path](/images/kubelet-service-manifest-path.jpg)
+    * Can also provide a path to another config yaml file using the `--config` option, then specify the path in there as `staticPodPath: /etc/kubernetes/manifest`
+      * Clusters set up by kubeadm tool uses this approach. 
+
+  * once the pods are created, you can view them by using the `docker ps` command. 
+    * can't use kubectl because that uses the kube-apiserver which isn't set up yet. 
+    * if you run `kubectl get pods` command on master node, the static pods will still show up. 
+      * Can't delete them with `kubectl delete`
+
+  ### Why Use These? 
+
+  *  You can use to install control plane components itself as pods on a node.
+       *  Start by installing kubelet on all the master nodes
+       *  Create pod definition files that use docker image files of the various controllers. 
+          *  apiserver.yaml
+          *  controller
+       *  don't have to worry about them crashing
+          *  since static pod, if it crashes, the pod will just be restarted by the kubelet. 
+       *  This is how the kubeadm sets things up
+
+  ### Static PODs vs DaemonSets
+  
+  |                                    Static Pods |                                        DaemonSets |
+  | ---------------------------------------------: | ------------------------------------------------: |
+  |                         Created by the kubelet | Created by Kube-API server (DaemonSet Controller) |
+  | Deploy control Plane components as static pods | Deploy Monitoring agents, logging agents on nodes |
+  
+  **Both Ignored by the Kube-Scheduler**
+
+
+* Create a static pod with the command `sleep 1000` using kubectl run commands. 
+  * `kubectl run --restart=Never --image=busybox static-busybox --dry-run -o yaml --command -- sleep 1000 > /etc/kubernetes/manifests/static-busybox.yaml` 
+
+### Delete Static Pods on other nodes
+
+* Steps:
+  1. identify which node the static pod is created on
+     * look at the trailing part of the name in `kubectl get pods` 
+  2. SSH into that Node
+     * If you don't know the IP of the node, run the `kubectl get nodes -o wide` command
+     * `ssh 172.17.0.84`
+  3. Delete Definition File
+     * static pod manifest path, look at file `/var/lib/kubelet/config.yaml`
+     * so `cat /var/lib/kubelet/config.yaml | grep staticPodPath`
+       * Then go to the directory there, in this case `/etc/just-to-mess-with-you` 
+       * Remove the static pod yaml file. 
+
+
+
+
+
+## Multiple Schedulers
+
+
+
+
+
+
+
 
 
 
@@ -1613,6 +1689,10 @@ spec:
       2. [Creation](#creation-1)
       3. [How it works](#how-it-works)
    8. [Static Pods](#static-pods)
+      1. [Why Use These?](#why-use-these)
+      2. [Static PODs vs DaemonSets](#static-pods-vs-daemonsets)
+      3. [Delete Static Pods on other nodes](#delete-static-pods-on-other-nodes)
+   9. [Multiple Schedulers](#multiple-schedulers)
 4. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
