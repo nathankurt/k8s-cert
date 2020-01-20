@@ -95,6 +95,14 @@
       1. [Config Maps](#config-maps)
          1. [Create the ConfigMaps](#create-the-configmaps)
          2. [Inject them into the pod.](#inject-them-into-the-pod)
+      2. [Secrets](#secrets)
+         1. [Creating a Secret](#creating-a-secret)
+         2. [Configuring Secrets With Pod](#configuring-secrets-with-pod)
+         3. [Secrets Notes](#secrets-notes)
+   6. [Multi Container PODs](#multi-container-pods)
+      1. [Create Multi Container Pod](#create-multi-container-pod)
+      2. [Multi Container PODs Design Patterns](#multi-container-pods-design-patterns)
+   7. [InitContainers](#initcontainers)
 6. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -2139,22 +2147,165 @@ volumes:
 ```
 
 
+### Secrets
+* config map stores data in plaintext so it may be okay to store things like `host` and `username`
+  * passwords are a big old no go. 
+
+* Secrets are similar to configMap except that they are stored in an encoded or hashed format. 
+
+#### Creating a Secret
+* Imperative `kubectl create secret generic`
+  * `kubectl create secret generic <secret-name> --from-literal=<key>=<value>`
+  * `kubectl create secret generic app-secret --from-literal=DB_Host=mysql`
+
+  * Can also use from file
+    * `kubectl create secret generic app-secret --from-file=secret.properties`
+* Declarative `kubectl create -f`
+  * `secret-data.yaml`
+    ```yaml
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: app-secret
+     #MUST SPECIFY SECRET VALUES IN HASHED FORMAT
+    data:
+      DB_Host: bXlzcWw=
+      DB_User: cm9vdA==
+      DB_Password: cGFzd3Jk
+     ####
+    ```
+  * Convert data from plain text to encoded with Linux command: 
+    * `echo -n 'mysql' | base64`
+    * `echo -n 'root' | base64`
+    * `echo -n 'passwrd' | base64`
+
+  * To view secrets run the `kubectl get secrets` command. 
+    * lists secret you've created along with another secret by kubernetes for its internal purposes.
+  * `kubectl describe secrets` - shows attributes but hides the value themselves. 
+    * to view value `kubectl get secret app-secret -o yaml`
+
+  * To decode secrets:
+    * `echo -n 'bXlzcWw=' | base64 --decode`
+    * `echo -n 'cm9vdA==' | base64 --decode`
+    * `echo -n 'cGFzd3Jk' | base64 --decode`
+
+#### Configuring Secrets With Pod
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-webapp-color
+spec:
+  containers:
+  - name: simple-webapp-color
+    image: simple-webapp-color
+    ports:
+      - containerPort: 8080
+    ### SET Config Map to Pod
+    envFrom: 
+      - secretRef:
+          name: app-secret
+          ## The name from the config-map.yaml file
+    
+```
+
+* `kubectl create -f pod-definition.yaml` makes the data in the secret available as env variables
+ 
+* Can inject it as a single environment variable
+
+```yaml
+env:
+  - name: APP_COLOR
+    valueFrom:
+      secretKeyRef:
+        name: app-secret
+        key: DB_Password
+```
+
+* Can inject whole data as files in a volume.
+
+```yaml
+volumes:
+- name: app-secret-volume
+  secret:
+    secretName: app-secret
+```
+  * Each attribute in the secret is created as a file with the value of the secret as its content
+  ![secret-volumes](/images/secret-volumes.jpg)
+  
+
+#### Secrets Notes
+
+Remember that secrets encode data in base64 format. Anyone with the base64 encoded secret can easily decode it. As such the secrets can be considered as not very safe.
+
+The concept of safety of the Secrets is a bit confusing in Kubernetes. The [kubernetes documentation](https://kubernetes.io/docs/concepts/configuration/secret) page and a lot of blogs out there refer to secrets as a "safer option" to store sensitive data. They are safer than storing in plain text as they reduce the risk of accidentally exposing passwords and other sensitive data. In my opinion it's not the secret itself that is safe, it is the practices around it. 
+
+Secrets are not encrypted, so it is not safer in that sense. However, some best practices around using secrets make it safer. As in best practices like:
+
+  * Not checking-in secret object definition files to source code repositories.
+
+  * [Enabling Encryption at Rest](https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/) for Secrets so they are stored encrypted in ETCD.  
+
+
+Also the way kubernetes handles secrets. Such as:
+
+  * A secret is only sent to a node if a pod on that node requires it.
+
+  * Kubelet stores the secret into a tmpfs so that the secret is not written to disk storage.
+
+  * Once the Pod that depends on the secret is deleted, kubelet will delete its local copy of the secret data as well.
+
+Read about the [protections](https://kubernetes.io/docs/concepts/configuration/secret/#protections) and [risks](https://kubernetes.io/docs/concepts/configuration/secret/#risks) of using secrets [here](https://kubernetes.io/docs/concepts/configuration/secret/#risks)
+
+
+Having said that, there are other better ways of handling sensitive data like passwords in Kubernetes, such as using tools like Helm Secrets, [HashiCorp Vault](https://www.vaultproject.io/). I hope to make a lecture on these in the future.
 
 
 
+## Multi Container PODs
+   
+   *  At times you may need two services to work together(ie web server and a logging service)
+      *  You need one agent instance per web server instance paired together.
+      *  Don't want to merge the code of the two together since each of them target different functionalities and still want them to be developed and deployed separately. 
+   *  Need one agent per web server instance paired together that can scale up and down together.
+   * This is why you have multi-container pods that share the same lifecycle which means they are created together and destroyed together.
+   * Also share the same network space and have access to the same storage volumes
+     * can refer to each other as "localhost"
+     * Don't have to establish volume sharing or services between the pods to enable communication. 
+
+
+### Create Multi Container Pod
+`pod-definition.yaml`
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-webapp
+  labels:
+    name: simple-webapp
+spec:
+  containers:
+    - name: simple-webapp
+      image: simple-webapp
+      ports:
+        - containerPort: 8080
+    ### Since value is an array, you can add another container here
+    - name: log-agent
+      image: log-agent
+    ###########
+```
+
+### Multi Container PODs Design Patterns
+
+* There are 3 common patterns, when it comes to designing multi-container PODs. The first and what we just saw with the logging service example is known as a side car pattern. The others are the adapter and the ambassador pattern.
+
+* But these fall under the CKAD curriculum and are not required for the CKA exam. So we will be discuss these in more detail in the CKAD course.
+![design-pattern](/images/design-pattern.jpg)
 
 
 
-
-
-
-
-
-
-
-
-
-
+## InitContainers
 
 
 
@@ -2301,6 +2452,14 @@ volumes:
       1. [Config Maps](#config-maps)
          1. [Create the ConfigMaps](#create-the-configmaps)
          2. [Inject them into the pod.](#inject-them-into-the-pod)
+      2. [Secrets](#secrets)
+         1. [Creating a Secret](#creating-a-secret)
+         2. [Configuring Secrets With Pod](#configuring-secrets-with-pod)
+         3. [Secrets Notes](#secrets-notes)
+   6. [Multi Container PODs](#multi-container-pods)
+      1. [Create Multi Container Pod](#create-multi-container-pod)
+      2. [Multi Container PODs Design Patterns](#multi-container-pods-design-patterns)
+   7. [InitContainers](#initcontainers)
 6. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
