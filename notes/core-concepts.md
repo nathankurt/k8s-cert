@@ -1852,7 +1852,8 @@ spec:
   * When a new deployment is created, to deploy say 5 replicas. 
     * first creates a ReplicaSet automatically, which in turn creates the number of PODs required to meet the number of replicas. 
     * When you upgrade your application, the kubernetes deployment object creates a new replicaset under the hood and starts deploying the containers there 
-      * at the same time taking down the pods in the old replica set following a 
+      * at the same time taking down the pods in the old replica set following a `rollingUpdate` strategy
+      * Can be seen when you try to list the replicasets using `kubectl get replicasets` command. 
 
 
 
