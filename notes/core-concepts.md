@@ -82,6 +82,9 @@
       2. [Logs - Kubernetes](#logs---kubernetes)
 5. [Application Lifecycle Management](#application-lifecycle-management)
    1. [Rolling Updates and Rollbacks](#rolling-updates-and-rollbacks)
+      1. [Deployment Strategies](#deployment-strategies)
+      2. [Kubectl apply](#kubectl-apply)
+      3. [Upgrades](#upgrades)
 6. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -1816,6 +1819,68 @@ spec:
 * When you first create a deployment, it triggers a **rollout**
   * new rollout creates a new deployment revision(we'll call it `revision 1`)
   * When application is upgraded, meaning new container version is updated to a new one a new rollout is triggered and a new deployment revision is created named `revision 2`. 
+  * helps us keep track of the changes made to our deployment and enables us to roll back to a previous version of deployment if necessary
+
+* Can see status of rollout by running the command: 
+  * `kubectl rollout status deployment/myapp-deployment`
+* to see revision history of rollouts
+  * `kubectl rollout history deployment/myapp-deployment`
+
+### Deployment Strategies
+**Example**
+  * you have 5 replicas of your web app instance deployed.
+    * One way to upgrade these to a newer version is to destroy all of these and then create newer versions
+      * issue is that during the period after the older versions are down and before newer version is up. app is down and inaccessible to users
+      * **Recreate Strategy**
+  * Second strategy is **Rolling Update**
+    * As you bring one down, you create a new app. 
+
+  ![deployment-strategies](/images/deployment-strategies.jpg)
+
+### Kubectl apply
+
+* Edit your deployment image with the new version
+  * then run `kubectl apply -f deployment-definition.yml`
+* You can also use `kubectl set image deployment/myapp-deployment nginx=nginx:1.9.1` to update image.
+  *  This won't change the deployment definition file though so be careful if you try to use that again. 
+
+* Difference between `Recreate` and `RollingUpdate` strategies can be seen with the `kubectl describe deployment` command. 
+  * With `Recreate` we can see that the old replica set was scaled 5->0->5
+  * with `RollingUpdate` we can see that old replicaset was scaled down one at a time. 
+
+### Upgrades
+  * When a new deployment is created, to deploy say 5 replicas. 
+    * first creates a ReplicaSet automatically, which in turn creates the number of PODs required to meet the number of replicas. 
+    * When you upgrade your application, the kubernetes deployment object creates a new replicaset under the hood and starts deploying the containers there 
+      * at the same time taking down the pods in the old replica set following a 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Quick Notes
 
@@ -1945,6 +2010,9 @@ spec:
       2. [Logs - Kubernetes](#logs---kubernetes)
 5. [Application Lifecycle Management](#application-lifecycle-management)
    1. [Rolling Updates and Rollbacks](#rolling-updates-and-rollbacks)
+      1. [Deployment Strategies](#deployment-strategies)
+      2. [Kubectl apply](#kubectl-apply)
+      3. [Upgrades](#upgrades)
 6. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
