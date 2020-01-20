@@ -85,6 +85,16 @@
       1. [Deployment Strategies](#deployment-strategies)
       2. [Kubectl apply](#kubectl-apply)
       3. [Upgrades](#upgrades)
+      4. [Rollback](#rollback)
+      5. [Kubectl run](#kubectl-run)
+      6. [Summarize-Commands](#summarize-commands)
+   2. [Configure Applications](#configure-applications)
+   3. [Application Commands - Docker](#application-commands---docker)
+   4. [Application Commands & Arguments](#application-commands--arguments)
+   5. [Configure Environment Variables in Applications](#configure-environment-variables-in-applications)
+      1. [Config Maps](#config-maps)
+         1. [Create the ConfigMaps](#create-the-configmaps)
+         2. [Inject them into the pod.](#inject-them-into-the-pod)
 6. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -1854,13 +1864,279 @@ spec:
     * When you upgrade your application, the kubernetes deployment object creates a new replicaset under the hood and starts deploying the containers there 
       * at the same time taking down the pods in the old replica set following a `rollingUpdate` strategy
       * Can be seen when you try to list the replicasets using `kubectl get replicasets` command. 
+      * ![rolling-updates](/images/rolling-upgrades-look.jpg)
+  * Also have options:
+  ```yaml
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  ``` 
+
+### Rollback
+  * say you update your application, then realize something is not right. 
+  * To undo a change, run `kubectl rollout undo deployment/app-deployment` command. 
+    * will destroy the pods in the new replicaset and then bring the older ones up in the old replicaset
+      * Then your application is back in the old format. 
+      * ![rollbacks](/images/rollbacks.jpg)
+
+### Kubectl run
+* `kubectl run nginx --image=nginx`
+  * This command actually creates a deployment and not just a pod. 
+  * another way of creating a deployment by only specifying the image name and not using a definition file.
+    * required replicaset and pods are auto created in the backend. 
+    * You SHOULD still use a definition file though since you can save the file and check it into a code repository.
+
+### Summarize-Commands
+  * **CREATE**
+    * `kubectl create -f deployment-definition.yml`
+  * **GET**
+    * `kubectl get deployments`
+  * **UPDATE**
+    * `kubectl apply -f deployment-definition.yml`
+    * `kubectl set image deployment/myapp-deployment nginx=nginx:1.9.1`
+  * **STATUS**
+    * `kubectl rollout status deployment/myapp-deployment`
+    * `kubectl rollout history deployment`
+  * **ROLLBACK**
+    * `kubectl rollout undo deployment/myapp-deployment`
 
 
+## Configure Applications
+
+* Comprises of understanding the following concepts:
+  * Configuring Command and Arguments on applications
+  * Configuring Environment Variables
+  * Configuring Secrets
 
 
+## Application Commands - Docker
+  
+  * First refresh our memory on commands in containers and docker
+    * translate into pods next. 
+  
+  * Scenario: 
+    * say you were to run a docker container from an Ubuntu image
+    * When you run the `docker run ubuntu` command, it runs an instance of Ubuntu image and exits immediately. 
+      * if you were to list the running containers(`docker ps`), you wouldn't see the container running
+      * if you were to list all containers including those that are stopped(`docker ps -a`), you will see the new container you ran, is in an exited state.
+      * This is because, unlike VMs, containers aren't meant to host an OS 
+      * Meant to run a specific task or process such as to host an instance of a web server or application server or a db or simply to carry out some kind of computation or analysis
+      * Once the task is complete, container exits.
+        * container only lives as long as the process inside it is alive. 
+      * Who defines what process is run within the container? 
+        *  if you look at docker file for popular docker images like NGINX, you will see instruction called `CMD ["nginx"]`
+        * For MySQL Image, it is the `CMD ["mysqld"]` command
+     * What we tried to do earlier was run a container with a plain Ubuntu Operating System.
+       * You will see that it uses `CMD ["bash"]` as default command. 
+         * `bash` isn't really a process like a web server or database server, it's a shell that listens for inputs from a terminal, and exits if it cannot find a terminal. 
+         * by default, Docker does not attach a terminal to a container when it's run. 
+           * so bash program does not find the terminal and so it exits.
+             * since the process that was started when the container was created, finished. The container exits as well. 
+     
+     * How do you specify a different command to start the container? 
+       * can append a command to the docker run command so it overrides the default command specified within the image. 
+         * `docker run ubuntu [COMMAND]`
+         * `docker run ubuntu sleep 5`
+            * when container starts, runs the sleep command, waits for 5 seconds then exits.
+      * How to make permanent? 
+         * Make your own image from the base ubuntu image and specify a new command
+          ```dockerfile
+          FROM Ubuntu
+          CMD sleep 5
+          ```
+          * can specify in a few ways. 
+            * either command simply as is in the shell form
+               ```dockerfile
+               CMD command param1
+               CMD ["command", "param1"]
+               ```
+
+               
+            * JSON array format like this
+              ```dockerfile
+               CMD sleep 5
+               CMD ["sleep", "5"]
+              ``` 
+        * Build new image using `docker build -t ubuntu-sleepter .`
+        * `docker run ubuntu-sleeper` can get same results
+          * What if you want to change the length of time it's sleeping for? 
+          * where `ENTRYPOINT` instruction comes into play
+            ```dockerfile
+            FROM Ubuntu
+
+            ENTRYPOINT ["sleep"]
+            ``` 
+            Whatever you specify on the command line in `docker run ubuntu-sleeper 10` will get appended.
+            ![docker-entry-point](/images/docker-entrypoint.jpg) 
+
+        * Can configure default value like this
+          ```dockerfile
+          FROM Ubuntu
+
+          ENTRYPOINT ["sleep"]
+
+          CMD ["5"]
+          ``` 
+
+## Application Commands & Arguments
+
+* Create a pod using `ubuntu-sleeper` image.
+  * sleeps for 5 seconds before exiting. 
+  
+`pod-definition.yml`
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ubuntu-sleeper-pod
+
+spec:
+
+  containers:
+    - name: ubuntu-sleeper
+      image: ubuntu-sleeper
+      ##Changes entrypoint command
+      command: ["sleep2.0"]
+      ## Anything that is appended to the docker run command will go into
+      ## the "args" property of the pod definition in array form. 
+      args: ["10"]
+      ###############
+``` 
+
+`kubectl create -f pod-definition.yml`
+
+* What if you need to override the entrypoint? Say from sleep to a hypothetical `sleep2.0` command? 
+  * In docker world, we would run the `docker run` command with the `entrypoint` option set to the new command 
+  * `docker run --name ubuntu-sleeper --entrypoint sleep2.0 ubuntu-sleeper 10`  
+ 
+
+## Configure Environment Variables in Applications
+  
+* Docker Environment Variable: 
+  * `docker run -e APP_COLOR=pink simple-webapp-color`
+
+* Kubernetes Version
+  
+  
+  * Plain Key Value:
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-webapp-color
+spec:
+  containers:
+  - name: simple-webapp-color
+    image: simple-webapp-color
+    ports:
+      - containerPort: 8080
+    ### SET ENV VARIABLE
+    env: #array so each thing starts with a dash. 
+      - name: APP_COLOR
+        value: pink
+
+    ###############
+```
+* ConfigMap
+```yaml
+env:
+  - name: APP_COLOR
+    valueFrom:
+      configMapKeyRef:
+
+```
+
+* Secrets
+
+```yaml
+env:
+  - name: APP_COLOR
+    valueFrom: 
+      secretKeyRef:
+``` 
+
+### Config Maps
+
+* When you have a lot of pod definition files, it will become difficult to manage the environment data stored within the query files. 
+
+* We can take this info out of the pod definition file and manage it centrally using Configuration Maps
+  * `ConfigMaps` are used to pass configuration data in the form of key value pairs in kubernetes. 
+  * When pod is created, inject config map into the pod so the key value pairs that are available as environment variables for the app hosted inside the pod. 
+
+* Two phases involved in configuring `ConfigMaps`
+  
+  
+  #### Create the ConfigMaps
+     * Imperative 
+        * `kubectl create configmap <config-name> --from-literal=<key>=<value>`
+        * `kubectl create configmap app-config --from-literal=APP_COLOR=blue`
+        * `kubectl create configmap app-config --from-literal=APP_COLOR=blue --from-literal=APP_MODE=prod`
+        * Gets a little complicated when you have too many config items. 
+        * Also can do from file
+          * `kubectl create configmap <config-name> --from-file=<path-to-file>`
+          * `kubectl create configmap app-config --from-file=app_config.properties`
+     * Declarative - `kubectl create -f `
+       * `config-map.yaml`
+       ```yaml
+       apiVersion: v1
+       kind: ConfigMap
+       metadata:
+        name: app-config
+       data: #instead of spec
+        APP_COLOR: blue
+        APP_MODE: prod
+       ``` 
+       * `kubectl create -f config-map.yaml`
+     * Can create as many `configmaps` as you need in the same way for various different purposes so important to name them appropriately.
+     * To View Config Maps 
+       * `kubectl get configmaps` 
+       * `kubectl describe configmaps`
+         * lists data.
 
 
+#### Inject them into the pod.  
 
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-webapp-color
+spec:
+  containers:
+  - name: simple-webapp-color
+    image: simple-webapp-color
+    ports:
+      - containerPort: 8080
+    ### SET Config Map to Pod
+    envFrom: 
+      - configMapRef:
+          name: app-config
+          ## The name from the config-map.yaml file
+    
+```
+^^ Using configMaps to inject environment variables. 
+
+* Can inject it as a single environment variable
+
+```yaml
+env:
+  - name: APP_COLOR
+    valueFrom:
+      configMapKeyRef:
+        name: app-config
+        key: APP_COLOR
+```
+
+* Can inject whole data as files in a volume.
+
+```yaml
+volumes:
+- name: app-config-volume
+  configMap:
+    name: app-config
+```
 
 
 
@@ -1902,6 +2178,7 @@ spec:
       * Then create a new pod with your changes using the temporary file
         * `kubectl create -f /tmp/kubectl-edit-ccvrq.yaml`
     2. Extract the pod definition in YAML format
+   
        * `kubectl get pod webapp -o yaml > my-new-pod.yaml`
        * Make changes to exported file using an editor
          * `vim my-new-pod.yaml`
@@ -2014,6 +2291,16 @@ spec:
       1. [Deployment Strategies](#deployment-strategies)
       2. [Kubectl apply](#kubectl-apply)
       3. [Upgrades](#upgrades)
+      4. [Rollback](#rollback)
+      5. [Kubectl run](#kubectl-run)
+      6. [Summarize-Commands](#summarize-commands)
+   2. [Configure Applications](#configure-applications)
+   3. [Application Commands - Docker](#application-commands---docker)
+   4. [Application Commands & Arguments](#application-commands--arguments)
+   5. [Configure Environment Variables in Applications](#configure-environment-variables-in-applications)
+      1. [Config Maps](#config-maps)
+         1. [Create the ConfigMaps](#create-the-configmaps)
+         2. [Inject them into the pod.](#inject-them-into-the-pod)
 6. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)

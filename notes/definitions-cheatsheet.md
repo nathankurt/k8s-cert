@@ -22,6 +22,11 @@
       2. [Custom Scheduler](#custom-scheduler)
       3. [Use Custom Scheduler](#use-custom-scheduler)
    19. [Event-Simulator](#event-simulator)
+   20. [Docker Args in Pod](#docker-args-in-pod)
+   21. [Environment Variables](#environment-variables)
+      1. [Plain Key Values](#plain-key-values)
+      2. [ConfigMaps](#configmaps)
+      3. [Secrets](#secrets)
 
 # Definitions
 
@@ -522,4 +527,119 @@ spec:
 
 
 More Info [here](/notes/core-concepts.md/#logs---kubernetes)
+
+
+## Docker Args in Pod
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ubuntu-sleeper-pod
+
+spec:
+
+  containers:
+    - name: ubuntu-sleeper
+      image: ubuntu-sleeper
+      ##Changes entrypoint command
+      command: ["sleep2.0"]
+      ## Anything that is appended to the docker run command will go into
+      ## the "args" property of the pod definition in array form. 
+      args: ["10"]
+      ###############
+``` 
+
+More Info [here](/notes/core-concepts.md/#application-commands--arguments)
+
+
+## Environment Variables
+
+### Plain Key Values
+  * Plain Key Value:
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-webapp-color
+spec:
+  containers:
+  - name: simple-webapp-color
+    image: simple-webapp-color
+    ports:
+      - containerPort: 8080
+    ### SET ENV VARIABLE
+    env: #array so each thing starts with a dash. 
+      - name: APP_COLOR
+        value: pink
+
+    ###############
+```
+
+
+### ConfigMaps
+
+`config-map.yaml`
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data: #instead of spec
+  APP_COLOR: blue
+  APP_MODE: prod
+``` 
+
+`pod-definition.yaml`
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-webapp-color
+spec:
+  containers:
+  - name: simple-webapp-color
+    image: simple-webapp-color
+    ports:
+      - containerPort: 8080
+    ### SET Config Map to Pod
+    envFrom: 
+      - configMapRef:
+          name: app-config
+          ## The name from the config-map.yaml file
+    
+```
+
+* Can inject it as a single environment variable
+
+```yaml
+env:
+  - name: APP_COLOR
+    valueFrom:
+      configMapKeyRef:
+        name: app-config
+        key: APP_COLOR
+```
+
+* Can inject whole data as files in a volume.
+
+```yaml
+volumes:
+- name: app-config-volume
+  configMap:
+    name: app-config
+```
+
+More Info [here](/notes/core-concepts.md/#create-the-configmaps)
+
+### Secrets
+
+* Secrets
+
+```yaml
+env:
+  - name: APP_COLOR
+    valueFrom: 
+      secretKeyRef:
+``` 
 
