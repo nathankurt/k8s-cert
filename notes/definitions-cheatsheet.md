@@ -27,6 +27,8 @@
       1. [Plain Key Values](#plain-key-values)
       2. [ConfigMaps](#configmaps)
       3. [Secrets](#secrets)
+   22. [Multi Container Pods](#multi-container-pods)
+   23. [InitContainers](#initcontainers)
 
 # Definitions
 
@@ -634,12 +636,108 @@ More Info [here](/notes/core-concepts.md/#create-the-configmaps)
 
 ### Secrets
 
-* Secrets
+* `secret-data.yaml`
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+  #MUST SPECIFY SECRET VALUES IN HASHED FORMAT
+data:
+  DB_Host: bXlzcWw=
+  DB_User: cm9vdA==
+  DB_Password: cGFzd3Jk
+  ####
+```
+
+* Secret in Pod `pod-definition.yaml`
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-webapp-color
+spec:
+  containers:
+  - name: simple-webapp-color
+    image: simple-webapp-color
+    ports:
+      - containerPort: 8080
+    ### SET Secretp to Pod
+    envFrom: 
+      - secretRef:
+          name: app-secret
+          ## The name from the secret.yaml file 
+```
+
+* Can inject it as a single environment variable
 
 ```yaml
 env:
   - name: APP_COLOR
-    valueFrom: 
+    valueFrom:
       secretKeyRef:
-``` 
+        name: app-secret
+        key: DB_Password
+```
 
+* Can inject whole data as files in a volume.
+
+```yaml
+volumes:
+- name: app-secret-volume
+  secret:
+    secretName: app-secret
+```
+
+More Info [here](/notes/core-concepts.md/#secrets)
+
+
+## Multi Container Pods
+
+`pod-definition.yaml`
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-webapp
+  labels:
+    name: simple-webapp
+spec:
+  containers:
+    - name: simple-webapp
+      image: simple-webapp
+      ports:
+        - containerPort: 8080
+    ### Since value is an array, you can add another container here
+    - name: log-agent
+      image: log-agent
+    ###########
+```
+
+More Info [here](/notes/core-concepts.md/#create-multi-container-pod)
+
+## InitContainers
+
+`pod-definition.yaml`
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+  labels:
+    app: myapp
+spec:
+  containers:
+  - name: myapp-container
+    image: busybox:1.28
+    command: ['sh', '-c', 'echo The app is running! && sleep 3600']
+  initContainers:
+  - name: init-myservice
+    image: busybox:1.28
+    command: ['sh', '-c', 'until nslookup myservice; do echo waiting for myservice; sleep 2; done;']
+  - name: init-mydb
+    image: busybox:1.28
+    command: ['sh', '-c', 'until nslookup mydb; do echo waiting for mydb; sleep 2; done;']
+```
+
+More Info [here](/notes/core-concepts.md/#initcontainers)
