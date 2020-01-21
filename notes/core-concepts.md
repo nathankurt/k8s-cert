@@ -103,13 +103,16 @@
       1. [Create Multi Container Pod](#create-multi-container-pod)
       2. [Multi Container PODs Design Patterns](#multi-container-pods-design-patterns)
    7. [InitContainers](#initcontainers)
-6. [Quick Notes](#quick-notes)
+6. [Cluster Maintenance](#cluster-maintenance)
+   1. [OS Upgrades](#os-upgrades)
+   2. [Kubernetes Software Versions](#kubernetes-software-versions)
+7. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
       2. [Edit Deployments](#edit-deployments)
    2. [Check for Port Clashing](#check-for-port-clashing)
    3. [Create all the files in a folder](#create-all-the-files-in-a-folder)
-7. [End Table of Contents](#end-table-of-contents)
+8. [End Table of Contents](#end-table-of-contents)
 
 
 Core Concepts
@@ -2202,11 +2205,11 @@ spec:
     image: simple-webapp-color
     ports:
       - containerPort: 8080
-    ### SET Config Map to Pod
+    ### SET Secretp to Pod
     envFrom: 
       - secretRef:
           name: app-secret
-          ## The name from the config-map.yaml file
+          ## The name from the secret.yaml file
     
 ```
 
@@ -2307,8 +2310,99 @@ spec:
 
 ## InitContainers
 
+* In a multi-container pod, each container is expected to run a process that stays llive as long as the POD's lifecycle. But at times you may want to run a process that runs to completion in a container. 
+  * i.e. A process that pulls a code or binary from a repo that will be used by the main web app. That is a task that will be run only one time when the pod is first created. Or a process that waits for an external service or db to be up before the actual application starts. 
+
+* An `initContainer` is configured in a pod like all other containers except that it is specified inside a `initContainers` section like this:
+
+`initContainer-definition.yaml`
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+  labels:
+    app: myapp
+
+spec:
+  containers:
+  - name: myapp-container
+    image: busybox:1.28
+    command: ['sh', '-c', 'echo the app is running! && sleep 3600']
+    
+  initContainers:
+  - name: init-myservice
+    image: busybox
+    command: ['sh', '-c', 'git clone <some-repository-that-will-be-used-by-application> ; done;']
+```
+* When a POD is first created, the initContainer is run, and the process in the initContainer must run to a completion before the real container hosting the app starts.
+* You can configure multiple like how we did for multi-pod containers. 
+  * in that case, each initContainer is run one at a time in sequential order.
+
+* If any of the initContainers fail to complete, Kubernetes restarts the pod repeatedly until the initContainer succeeds 
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+  labels:
+    app: myapp
+spec:
+  containers:
+  - name: myapp-container
+    image: busybox:1.28
+    command: ['sh', '-c', 'echo The app is running! && sleep 3600']
+  initContainers:
+  - name: init-myservice
+    image: busybox:1.28
+    command: ['sh', '-c', 'until nslookup myservice; do echo waiting for myservice; sleep 2; done;']
+  - name: init-mydb
+    image: busybox:1.28
+    command: ['sh', '-c', 'until nslookup mydb; do echo waiting for mydb; sleep 2; done;']
+```
+
+* More about initContainers [here](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/)
 
 
+# Cluster Maintenance
+
+## OS Upgrades
+
+  * Have a cluster with a few nodes and pods serving applications. what happens when one of these nodes goes down?
+    * pods on them aren't accessible
+    * depending on how you deployed those pods, your users may be impacted.
+    * For example, since you have multiple replicas of the blue pod, the users accessing the blue application aren't impacted as they are being served through the other blue pod that's online. 
+    * However users accessing `green` pod are impacted as that was the only pod running the green application. 
+    ![node-down](/images/node-down.jpg)
+
+  * What does kubernetes do in this case? 
+    * If the node came back online immediately, then the kubelet process starts and the pods come back online
+    * If the node was down for more than 5 minutes, the pods are terminated from that node and kubernetes considers them as dead. 
+      * If the PODs were part of a replicaset, then they are recreated on other nodes
+    * **Pod Eviction Timeout:** Time it waits for a pod to come back online 
+      * set on the controller manager with a default value of 5 minutes
+      * `kube-controller-manager --pod-eviction-timeout=5m0s ...` 
+      * When node comes back online after the pod eviction timeout, it comes up blank without any pods scheduled. 
+      * Since blue pod was part of a replicaset, it had a new pod created on another node.
+        * Since the green pod was not part of the replicaset, it's just gone
+       ![pod-eviction-timeout](/images/pod-eviction-timeout.jpg)
+  
+  * Safe way to do an upgrade.
+    * Purposefully drain the node of all the workloads so that the workloads are moved to other nodes.
+      * `kubectl drain [node-name]` EX: `kubectl drain node-1` 
+      * technically aren't moved. gracefully terminated from one node and recreated on another. 
+      * node is cordoned aka marked as un-schedulable, meaning no pods can be scheduled on this node until you specifically remove this restriction
+        * ![cordoned-node](/images/cordoned-node.jpg)
+      * Then you can reboot the first node, then you need to uncordon it, so that pods can be scheduled on it again
+        * `kubectl uncordon [node-name]` EX: `kubectl uncordon node-1`
+        * Pods that were moved to the other nodes, don't automatically fall back. 
+    
+    * Also another command called `cordon` so `kubectl cordon node-2`
+      * just marks a node as unschedulable but doesn't terminate or move pods on existing node. 
+
+## Kubernetes Software Versions
+* We know that when we install a kubernetes cluster, we install a specific version of kubernetes that we can see when we run the `kubectl get pods`  
 
 # Quick Notes
 
@@ -2460,10 +2554,13 @@ spec:
       1. [Create Multi Container Pod](#create-multi-container-pod)
       2. [Multi Container PODs Design Patterns](#multi-container-pods-design-patterns)
    7. [InitContainers](#initcontainers)
-6. [Quick Notes](#quick-notes)
+6. [Cluster Maintenance](#cluster-maintenance)
+   1. [OS Upgrades](#os-upgrades)
+   2. [Kubernetes Software Versions](#kubernetes-software-versions)
+7. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
       2. [Edit Deployments](#edit-deployments)
    2. [Check for Port Clashing](#check-for-port-clashing)
    3. [Create all the files in a folder](#create-all-the-files-in-a-folder)
-7. [End Table of Contents](#end-table-of-contents)
+8. [End Table of Contents](#end-table-of-contents)
