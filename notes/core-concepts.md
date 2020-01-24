@@ -106,12 +106,26 @@
 6. [Cluster Maintenance](#cluster-maintenance)
    1. [OS Upgrades](#os-upgrades)
    2. [Kubernetes Software Versions](#kubernetes-software-versions)
+   3. [Cluster Upgrade Process](#cluster-upgrade-process)
+      1. [When should you upgrade](#when-should-you-upgrade)
+      2. [Upgrade Process](#upgrade-process)
+      3. [Kubeadm - upgrade](#kubeadm---upgrade)
+   4. [Backup and Restore Methods](#backup-and-restore-methods)
+      1. [Resource Configuration Backup](#resource-configuration-backup)
+      2. [Backup - ETCD](#backup---etcd)
+   5. [TLS](#tls)
+      1. [TLS Basics](#tls-basics)
+         1. [Asymmetric Encryption](#asymmetric-encryption)
+         2. [Back to Certs](#back-to-certs)
+      2. [TLS In Kubernetes](#tls-in-kubernetes)
+      3. [TLS Certificate Creation](#tls-certificate-creation)
 7. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
       2. [Edit Deployments](#edit-deployments)
    2. [Check for Port Clashing](#check-for-port-clashing)
    3. [Create all the files in a folder](#create-all-the-files-in-a-folder)
+   4. [Check Number of Applications](#check-number-of-applications)
 8. [End Table of Contents](#end-table-of-contents)
 
 
@@ -142,13 +156,13 @@ Core Concepts
     * Cargo team takes care of containers. When containers are damaged or destroyed, they make sure new containers are made available
     * Services office that takes care of the I.T and communications between different ships. 
 
-* Controller Manager: In Kubernetes we have controllers available that take care of different areas. 
-  * Node-Controller - takes care of nodes
+* **Controller Manager**: In Kubernetes we have controllers available that take care of different areas. 
+  * **Node-Controller** - takes care of nodes
     * onboarding new nodes to cluster, 
     * handling situations where nodes become unavailable or get destroyed.
   * Replication-Controller - ensures desired number of containers are running at all time.  
 
-* kube-apiserver is primary management component of kubernetes. 
+* **kube-apiserver** is primary management component of kubernetes. 
   * Responsible for orchestrating all operations within the cluster. 
   * exposes the Kubernetes API which is used by external users to perform management operations on the cluster as well as the various controllers to monitor the various state of the cluster and make the necessary changes as required by the worker nodes to communicate with the server. and by the worker nodes to communicate with the server. 
 
@@ -2402,7 +2416,425 @@ spec:
       * just marks a node as unschedulable but doesn't terminate or move pods on existing node. 
 
 ## Kubernetes Software Versions
-* We know that when we install a kubernetes cluster, we install a specific version of kubernetes that we can see when we run the `kubectl get pods`  
+* We know that when we install a kubernetes cluster, we install a specific version of kubernetes that we can see when we run the `kubectl get pods` 
+
+* Release Versions consist of three parts  
+  * Major version - `1`.11.3
+  * Minor Version - 1.`11`.3
+    * Every few months
+    * Features and functionalities
+  * Patch Version - 1.11.`3`
+    * more often
+    * critical bug fixes 
+ ![release-versions](/images/release-versions.jpg)
+
+* You can download `kubernetes.tar.gz` file and extract it to find executables for all the kubernetes components
+  * downloaded package when extracted has all the control plane components in it - same version
+  * other components within the control plane, that do not have the same version numbers 
+    * ETCD cluster and CoreDNS servers have their own versions as they are separate projects
+  * ![kubernetes-versions](/images/kubernetes-versions.jpg)
+
+## Cluster Upgrade Process
+  * Focusing on core control-plane components
+  * Not mandatory for all control plane components to have the same version. 
+  
+  * BUT None of the other components should ever be at a version higher than kube-apiserver 
+    * Since the kube-api server is the primary component in the control plane and that is the component that all other components talk to. 
+    * Controller manager and scheduler can be at one version lower. 
+    * kubelet and kube-proxy components can be at two versions lower.
+  * kubectl can be up to one version higher or up to one version lower than kubeapi server
+  * ![control-plane-component-versions](/images/control-plane-versions.jpg)
+  
+  * Allows us to upgrade component by component if we have to.
+
+### When should you upgrade
+
+* At any time kubernetes only supports the three most recent minor versions. 
+* So if most recent version is 1.12, then `1.12`, `1.13`, and `1.14` are supported. 
+  * however when `1.13` comes out, `1.10` becomes unsupported. 
+* Good time to upgrade is right before `1.13` release
+
+* Recommended upgrade approach is to upgrade one minor version at a time. 
+  * So `1.10` -> `1.11`, `1.11`->`1.12`, `1.12`->`1.13`
+  * **NOT** `1.10` -> `1.13` 
+
+### Upgrade Process
+
+* If your cluster is a managed kubernetes cluster deployed on cloud service providers, like Google
+  * GKE lets you upgrade your cluster easily with just a few clicks. 
+* If you deployed your cluster using tools like `kubeadm`, then the tool can help you plan and upgrade the cluster.
+  * `kubeadm upgrade plan`
+  * `kubeadm upgrade apply`
+
+* If you deployed your cluster from scratch, then you manually upgrade the different components of the cluster yourself.  
+
+* Focusing on the kubeadm way of doing things. 
+
+* EXAMPLE:
+  * Have cluster with master and worker nodes running in production hosting pods serving users. 
+    * Nodes and components are at version 1.10
+  
+  * First upgrade master node, then upgrade worker node. 
+    * While the master node is being upgraded, control plane components such as apiserver, scheduler, and controller managers go down briefly. 
+      * master going down doesn't mean your worker nodes and applications on the cluster are impacted. all workloads hosted on the worker nodes continue to server users as normal. 
+      * since master is down, all management functions are down. can't access the cluster using kubectl or other kubernetes api. 
+        * cannot deploly new apps or delete/modify existing ones. 
+        * controller manager won't function either. if a pod was to fail, new pod won't be automatically created. 
+  * once upgraded, cluster shoulbe be back to function normally
+  * now time to upgrade worker nodes. 
+    * could upgrade all at once, but then your pod is down and users aren't able to access applications. Once the upgrade is complete, the nodes are back up, new pods are scheduled and users can resume access. 
+      * Not a great way to go.
+    * Other way would be to upgrade one node at a time. 
+      * upgrade the first node, where workloads move to the second and third node, then once that's done, move workloads to first and thirds
+      * etc.
+    * Third strategy would be to add new nodes to the cluster with newer software version. move workload over to new, and remove old node. 
+
+### Kubeadm - upgrade
+  * say we want to upgrade a cluster from `1.11` to `1.13`
+    * `kubeadm` has an upgrade command to help
+    * `kubeadm upgrade plan` will give a lot of good info
+      * current cluster version
+      * current kubeadm version
+      * latest stable version of kubernetes
+      * all control plane components and their versions and what version can be upgraded to
+      * also tells you that you have to manually update the kubelet version on each node.
+        * kubeadm does not install or upgrade kubelets. 
+      ![kubeadm-upgrade](/images/kubeadm-upgrade-plan.jpg) 
+
+  * first upgrade kubeadm to right version(starting on version 1.11)
+    * `apt-get upgrade -y kubeadm=1.12.0-00`
+  * then upgrade cluster using the command from the upgrade plan output
+    * `kubeadm upgrade apply v1.12.0`
+
+  * if you run the `kubectl get nodes` command, you will still see the master node at 1.11 because the output of this command is showing the versions of kubelets on each of the nodes registered with the apiserver and not the apiserver itself. 
+
+  * Next step is to upgrade the kubelet
+    * first upgrade kubelet on the master node. 
+      * `apt-get upgrade -y kubelet=1.12.0-00`
+      * once upgraded, restart kubelet service
+      * `systemctl restart kubelet`
+    * Then upgrade kubelet on worker nodes, one at a time.
+      * `kubectl drain node-1`
+      * `apt-get upgrade -y kubeadm=1.12.0-00`
+      * `apt-get upgrade -y kubelet=1.12.0-00`
+      * `kubeadm upgrade node config --kubelet-version v1.12.0`
+      * `systemctl restart kubelet`
+      * Node should now be up with new software version. however when we drain the node, we marked it as unschedulable so we need to unmark it. 
+        * `kubectl uncordon node-1`
+      * ![upgrade-worker-nodes](/images/kubeadm-worker-upgrade.jpg)
+      * Repeat for nodes 2 and 3. 
+
+*Upgrade Worker Nodes*
+  * `kubectl drain node-1`
+  * ssh into worker node
+  * `apt-get upgrade -y kubeadm=1.12.0-00`
+  * `apt-get upgrade -y kubelet=1.12.0-00`
+
+
+## Backup and Restore Methods
+  
+### Resource Configuration Backup
+  * Declaritive approach is preferred way if you want to save your configuration. Because now you have all the objects required for a single application in the form of object definition folders. 
+    * Good practice is to store them in code repo. 
+    * But not required for everyone to stick to those standards.
+  * Bettera approach to backing up resource config is to query the kube-apiserver
+    * using `kubectl or by accessing the API server directly and save all resource configurations for all objects created on the cluster 
+    * for example one of the commands that can be used in a backup script to get all `pods`, `deployments`, and `services` in all namespaces using `kubectl get all --all-namespaces -o yaml > all-deploy-services.yaml` then save that file.
+      * still missing a lot of things. but can use things like VELERO by HeptIO to do the backups.
+    
+  ### Backup - ETCD
+   *  The ETCD cluster stores information about the state of our cluster. So info about the cluster itself, the nodes and every other resource as created within the cluster are stored here.
+   * So instead of backing up resources, may choose to backup the ETCD server itself. 
+   * hosted on master nodes. 
+   * data directory that configured to store all the data can be configured to be backed up by your backup tool.
+   * Also comes with a builtin snapshot tool by using `etcdctl` 
+     * `etcdctl snapshot save snapshot.db` snapshot file is created in current directory
+     * `etcdctl snapshot status snapshot.db` to view status of the backup. 
+   * to restore cluster from backup
+     * stop the kube-api server service with `service kube-apiserver stop` since restore process will require you to restart ETCD
+     * then run `etcdctl restore` command.
+      ```bash
+      etcdctl \
+      snapshot restore snapshot.db
+      --data-dir /var/lib/etcd-from-backup \
+      --initial-cluster master-1=https://192.168.5.11:2380,master-2=https://192.168.5.12:2380 \
+      --initial-cluster-token etcd-cluster-1 \
+      --initial-advertise-peer-urls https://${INTERNAL_IP}:2380
+      ``` 
+    * Initializes a new cluster config and configures the members of ETCD as new members to a new cluster. 
+      * prevents a new member from accidentally joining an existing cluster. 
+      * say for example, you use this backup snapshot to provision a new etcd-cluster for testing purposes,
+        * don't want members in new test cluster to accidentally join the production cluster. 
+      * during restore, you must specify a new cluster token and the same initial cluster configuration
+      * then configure etcd service in new data directory wiht new token and updated data dir path. 
+      * reload the service daemon and restart etcd service.   
+        * `systemctl daemon-reload`
+        * `service etcd restart`   
+        * `service kube-apiserver start`
+      * **Remember to specify certificate files for authentication**
+        * specify the endpoint to the ETCD cluster,
+        * specify CA Certificate
+        * specify the etcd-server certificate. 
+  * If you are using a manged kubernetes cluster, backup by querying the kube-apiserver is probably the better way. 
+  ```etcdctl --endpoints=https://[127.0.0.1]:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key snapshot save /tmp/snapshot-pre-boot.db``` 
+
+  ```ETCDCTL_API=3 etcdctl snapshot save /tmp/snapshot-pre-boot.db --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key```
+
+```ETCDCTL_API=3 etcdctl --endpoints=https://[127.0.0.1]:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt  --name=master  --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key --data-dir /var/lib/etcd-from-backup   --initial-cluster=master=https://127.0.0.1:2380  --initial-cluster-token etcd-cluster-1 --initial-advertise-peer-urls=https://127.0.0.1:2380      snapshot restore /tmp/snapshot-pre-boot.db```
+
+* then go into etcd and update `/etc/kubernetes/manifests/etcd.yaml`
+
+* update --data-dir to use new target location
+   `--data-dir=/var/lib/etcd-from-backup`
+
+Update new initial-cluster-token to specify new cluster
+  `--initial-cluster-token=etcd-cluster-1`
+
+Update volumes and volume mounts to point to new path
+
+```yaml
+    volumeMounts:
+    - mountPath: /var/lib/etcd-from-backup
+      name: etcd-data
+    - mountPath: /etc/kubernetes/pki/etcd
+      name: etcd-certs
+  hostNetwork: true
+  priorityClassName: system-cluster-critical
+  volumes:
+  - hostPath:
+      path: /var/lib/etcd-from-backup
+      type: DirectoryOrCreate
+    name: etcd-data
+  - hostPath:
+      path: /etc/kubernetes/pki/etcd
+      type: DirectoryOrCreate
+    name: etcd-certs
+```
+
+
+
+# Security
+
+## Kubernetes Security Primitives
+
+* Host that formed the cluster itself. 
+  * Focus in this lecture is more on kubernetes related security
+  
+  
+* kube-apiserver is at the center of  all operations within kubernetes.
+  * Interact with it through the kubectl utility
+  * Or by accessing the API directly. 
+  * through this, you can perform almost any action on the cluster
+
+* **First Line of Defense:** Controlling access to the API Server itself
+  * Need to make two types of decisions
+    * Who can access the cluster?
+      * Different ways you can authenticate to the API server
+        * Files - user IDs and passwords
+        * Files - Username and Tokens
+        * Certificates
+        * Integration with external authentication providers - LDAP
+        * Service Accounts
+    * What Can They do? 
+      * Role Based Access Control(RBAC) Authorization
+        * Users associated to groups with specific permissions. 
+      * Acess Based Access Control(ABAC) Authorization
+      * Node Authorizers
+      * Webhook Mode
+
+  * All communication with the cluster, between the various components such as the ETCD cluster, kube controller manger, scheduler, api server, as well as those running on the running on worker nodes like kubelet and kubeproxy is secured using TLS encryption.
+  
+  * What about communication between applications within the cluster
+    * By default all pods can access all other pods within the cluster.
+    * Can restrict access between them using *network policies*. 
+
+
+## Authentication
+
+* Focus is on users access to the kubernetes cluster for administrative purposes.
+* Two types of users
+  * Humans: admins and developers
+  * Robots
+    * other processes/services or applications that require access to the cluster.
+
+* Kubernetes does not manage user accounts natively. Relies on external sources to manage users
+  * like a file with user details or certs. 
+  * or a third party identity service like LDAP
+
+* Cannot create or view users with kubectl
+* Can manage service accounts though
+  * `kubectl create serviceaccount sa1`
+  * `kubectl list serviceaccount`
+
+
+### User Authentication
+
+* All user access is managed by the API server
+* weather you are accessing through kubectl or api directly. 
+  * kube-apiserver authenticates the request before processing it
+   ![user-auth-flow](/images/user-auth-process.jpg)
+
+* Different Auth Mechanisms that can be configured
+  * Static Password File
+    * list of usernames and passwords
+  * Static Token File
+    * list of usernames and tokens
+  * Certificates
+  * Identity Services
+    * LDAP
+    * Kerberos
+
+
+#### Basic Auth Mechanisms
+  * can create a list of users and their passwords in a csv file and use that as the source for user information
+    * file has three columns
+      * password
+      * username
+      * userid
+    * then pass the file name as an option to the kube-api server `--basic-auth-file=user-details.csv`
+  * If you set up with `kubeadm` tool, then you must modify the kube-apiserver POD definition
+`/etc/kubernetes/manifests/kube-apiserver.yaml`
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp:
+  name: kube-apiserver
+  namespace: kube-system
+spec:
+  containers:
+  - command:
+    - kube-apiserver
+    - --authorization-mode=Node,RBAC
+    - --advertise-address=172.17.0.107
+    - --allow-privileged=true
+    - --enable-admission-plugins=NodeRestriction
+    - --enable-bootstrap-token-auth=true
+    ############add this new arg
+    - --basic-auth-file=user-details.csv
+    ###################
+    image: k8s.gcr.io/kube-apiserver-amd64:v1.11.3
+    name: kube-apiserver
+```
+
+  * to authenticate using basic credentials while accessing the API server, specify the user and password using a curl command 
+  * This is not recommended since it is insecure. 
+
+## TLS
+
+### TLS Basics
+
+* A certificate is used to guarantee trust between two parties during a transaction.
+  * When a user tries to access a web server, TLS certificates ensure that the communication between the user and the server is encrypted and the server is who it says it is. 
+
+**Scenario**
+* Without Secure Connectivity, user accessing his online banking application:
+  * The credentials he types in would be sent in a plain text format
+  * Hacker sniffing network traffic could easily retrieve the credentials and use it to hack into the user account
+* Not safe so you must encrypt the data being transferred using encryption keys. 
+  * data is encrypted using a key which is basically a set of random numbers 
+  * ![encryption-process-pre](/images/tls-encryption-process-key.jpg)
+  * Then data is sent to server, the hackers only get the encrypted keys though, so it doesn't matter that much.
+    * ![encryption-process-post](/images/tls-encryption-send-server.jpg)
+  * However, the server cannot decrypt data either unless they have the key
+    * copy of key must also be sent so server can decrypt and read the message but since over the same network, attacker can sniff that as well and decrypt data with it. 
+  * This is known as **symmetric encryption**
+    * secure way of encryption but since it uses the same key to the encrypt and decrypt the data and since the key has to be exchanged between the sender and the receiver, there is a risk of a hacker gaining access to the key and decrypting the data.
+
+#### Asymmetric Encryption
+  * instead of using a single key to encrypt and decrypt data, uses a pair of keys
+    * Private key
+    * Public Key(lock for sake of example)
+      * a lock that anyone can access, so it's public. 
+  * Trick here is if you encrypt or lock that data with your lock, you can only open it with the associated key. 
+  * ![asymmetric-encryption](/images/asymetric-encryption.jpg)
+  * key must always be secure with you and not be shared with anyone else
+  * Lock is public and may be shared with others but they can only lock something with it. 
+    * no matter what is locked with public lock, it can only be unlocked by your private key. 
+    * ![private-key-public-lock](/images/private-key-public-lock.jpg)
+**Server Example**
+  * Have a server in your environment that you need access to, but don't want to use passwords because they are too risky. 
+  * decide to use key pairs and generate public and private key with `ssh-keygen`
+    * creates two files, `id_rsa` and `id_rsa.pub`
+    * and save public key on server in the `~/.ssh/authorized_keys` file
+  * specify where private key is when you ssh with `ssh -i id_rsa user1@server1`
+
+  * If other users need access to your servers, they can do the same thing. Generate their own public and private keys. 
+    * then you, the only person with access to the servers can create an additional door for them by adding their public key to the `authorized_keys` file.
+
+**Web Server Example Asymmetric**
+* Once the key is safely made available to the server, the server and client can safely continue communication via symmetric encryption
+* To securly transfer the symmetric key from the client to the server, we use asymmetric encryption. 
+  * we generate a public and private key pair on the server
+  * since the ssh-keygen was for ssh purposes and not for sending traffic,
+    * you use `openssl genrsa -out my-bank.key 1024` to generate private key(`my-bank.key`)
+      * `genrsa` means private key
+    * then `openssl rsa -in my-bank.key -pubout > mypank.pem` to generate puplic key(`mybank.pem`)
+
+* When the user first access the web server using https, he gets the public key from the server
+* Since the hacker is sniffing all traffic, it's assumed he gets a copy of the public key. 
+* The user's browser, then encrypts the symmetric key using the public key provided by the server
+* symmetric key is now secure, the user then sends this to the server. 
+  * ![asymetric-encryption-step1](/images/asymetric-openssl-step1.jpg)
+  * ![asymetric-encryption-step2](/images/asymetric-openssl-step2.jpg)
+  * ![asymetric-encryption-step3](/images/asymetric-openssl-step3.jpg)
+* Hacker only has public key with which he can only lock or encrypt a message. and not decrypt the message. 
+* Symmetric key is now safely available to just the user and the server.
+* They can now use the symmetric key to encrypt data and send to each other. 
+  * Receiver can use the same symmetric key to decrypt data and retrieve information. 
+  * Hacker is left with the encrypted messages adn public keys with which he can't decrypt any data
+
+#### Back to Certs
+
+* Hacker now looks for new ways to hack into your account and realizes the only way is by getting you to type it into a form he presents.
+* So he creates a web site that looks exactly 
+
+
+
+### TLS In Kubernetes
+
+### TLS Certificate Creation 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Quick Notes
 
@@ -2449,7 +2881,10 @@ spec:
 * `kubectl create -f .`
   * just add the `.` in there to use it as a wildcard, `*` doesn't work 
 
+## Check Number of Applications
 
+* `kubectl get deployments` 
+  * gives you the number of applications running currently. 
 
 # End Table of Contents
 1. [Table of Contents](#table-of-contents)
@@ -2557,10 +2992,24 @@ spec:
 6. [Cluster Maintenance](#cluster-maintenance)
    1. [OS Upgrades](#os-upgrades)
    2. [Kubernetes Software Versions](#kubernetes-software-versions)
+   3. [Cluster Upgrade Process](#cluster-upgrade-process)
+      1. [When should you upgrade](#when-should-you-upgrade)
+      2. [Upgrade Process](#upgrade-process)
+      3. [Kubeadm - upgrade](#kubeadm---upgrade)
+   4. [Backup and Restore Methods](#backup-and-restore-methods)
+      1. [Resource Configuration Backup](#resource-configuration-backup)
+      2. [Backup - ETCD](#backup---etcd)
+   5. [TLS](#tls)
+      1. [TLS Basics](#tls-basics)
+         1. [Asymmetric Encryption](#asymmetric-encryption)
+         2. [Back to Certs](#back-to-certs)
+      2. [TLS In Kubernetes](#tls-in-kubernetes)
+      3. [TLS Certificate Creation](#tls-certificate-creation)
 7. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
       2. [Edit Deployments](#edit-deployments)
    2. [Check for Port Clashing](#check-for-port-clashing)
    3. [Create all the files in a folder](#create-all-the-files-in-a-folder)
+   4. [Check Number of Applications](#check-number-of-applications)
 8. [End Table of Contents](#end-table-of-contents)

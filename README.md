@@ -3,14 +3,14 @@
 ## Notes
 For Notes, start [In the Notes Folder!](/notes) and [Core Concepts](/notes/core-concepts.md) for in depth notes. 
 
-* [Core-Concepts](/notes/core-concepts.md) Starts with the Core-Concepts section of the course and also goes into these topics:
+* [core-concepts.md](/notes/core-concepts.md) Starts with the [Core-Concepts](/notes/core-concepts.md/#core-concepts) section of the course and also goes into these topics:
   * [Scheduling](/notes/core-concepts.md/#scheduling)
   * [Logging & Monitoring](/notes/core-concepts.md/#logging-and-monitoring)
   * [Application Lifecycle Management](/notes/core-concepts.md/#application-lifecycle-management)
   * [Cluster Maintenance](/notes/core-concepts.md/#cluster-maintenance)
   * [Imperative Commands](/notes/core-concepts.md/#imperative-commands)
 
-* [Definitions-Cheatsheet](/notes/definitions-cheatsheet.md) Is a cheatsheet that has all of the yaml definition files in it for one easy-to-access place
+* [definitions-cheatsheet.md](/notes/definitions-cheatsheet.md) Is a cheatsheet that has all of the yaml definition files in it for one easy-to-access place
 
 
 ## Review
