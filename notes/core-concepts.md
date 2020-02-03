@@ -119,10 +119,16 @@
          2. [Back to Certs](#back-to-certs)
       2. [TLS In Kubernetes](#tls-in-kubernetes)
          1. [Server Certificates for Servers](#server-certificates-for-servers)
-         2. [Client Certificates for Clients](#client-certificates-for-clients)
+         2. [Server Certificates for Servers](#server-certificates-for-servers-1)
+         3. [Server Certificates for Servers](#server-certificates-for-servers-2)
+         4. [Client Certificates for Clients](#client-certificates-for-clients)
       3. [TLS Certificate Creation](#tls-certificate-creation)
          1. [Certificate Authority Cert Creation](#certificate-authority-cert-creation)
          2. [Generating Client's Certificates](#generating-clients-certificates)
+         3. [What to Do](#what-to-do)
+         4. [Server Certificate Creation](#server-certificate-creation)
+   6. [View Certificate Details](#view-certificate-details)
+      1. [Health Check](#health-check)
 7. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -2860,23 +2866,35 @@ spec:
   * Have all the various servers within the cluster to use server certs
   * Have all clients to use client certs to verifiy they are who they say they are. 
 
+  #### Server Certificates for Servers 
 #### Server Certificates for Servers 
+  #### Server Certificates for Servers 
 
-* Kube-apiserver
+  * Kube-apiserver
+    * Exposes an HTTPS service that other components as well as external users use to manage the kubernetes cluster. 
   * Exposes an HTTPS service that other components as well as external users use to manage the kubernetes cluster. 
+    * Exposes an HTTPS service that other components as well as external users use to manage the kubernetes cluster. 
+      * So it is a server and it requires certs to secure all communication with its clients. 
     * So it is a server and it requires certs to secure all communication with its clients. 
+      * So it is a server and it requires certs to secure all communication with its clients. 
+        * Generate a certificate and key pair. 
       * Generate a certificate and key pair. 
-      * Call it `APIserver.crt` and `APIserver.key`
-* ETCD Server stotores all the information abou the cluster so it requires a pair of certificate and keys for itself.
-  * call it `etcdserver.crt` and `etcdserver.key`
-* Other server component is on the worker nodes.
+        * Generate a certificate and key pair. 
+        * Call it `APIserver.crt` and `APIserver.key`
+  * ETCD Server stotores all the information abou the cluster so it requires a pair of certificate and keys for itself.
+    * call it `etcdserver.crt` and `etcdserver.key`
+  * Other server component is on the worker nodes.
+    * kublet servers but also expose an https api in the point that the Kubeapi server talks to to interact with the worker nodes. 
   * kublet servers but also expose an https api in the point that the Kubeapi server talks to to interact with the worker nodes. 
+    * kublet servers but also expose an https api in the point that the Kubeapi server talks to to interact with the worker nodes. 
+      * That requires a certificate and keypair. 
     * That requires a certificate and keypair. 
-    * call it `kubelet.crt` and `kubelet.key`
-![server-certs](/images/server-cerrts.jpg)
+      * That requires a certificate and keypair. 
+      * call it `kubelet.crt` and `kubelet.key`
+  ![server-certs](/images/server-cerrts.jpg)
 
 
-#### Client Certificates for Clients
+  #### Client Certificates for Clients
   * Clients who access the kube-api server
     * US, the admins using `kubectl` or `kube-api`
       * Admin user requires certificate and key pair to authenticate the kube-api server
@@ -2920,7 +2938,7 @@ spec:
       * `cfssl`
       * etc.
 
-#### Certificate Authority Cert Creation
+  #### Certificate Authority Cert Creation
   * First create a private key using the command 
     * `openssl genrsa -out ca.key 2048`
   * Then use openssl request command along with key we just created to generate a certificate signing request
@@ -2936,26 +2954,227 @@ spec:
   * Since this is for the CA itself, it is self-signed by the CA using its own private key that it generated in the first step. 
     * Going forward for all other certificates, we will use this ca key pair to sign them. 
 
-#### Generating Client's Certificates
 
-* Start with Admin User:
-  * Generate Keys
-    * `openssl genrsa -out admin.key 2048`
-  * CSR(Certificate Signing Request)
-    * `openssl req -new -key admin.key -subj "/CN=kube-admin" -out admin.csr`
+  #### Generating Client's Certificates
+
+  * Start with **Admin User**:
+    * Generate Keys
+      * `openssl genrsa -out admin.key 2048`
+    * CSR(Certificate Signing Request)
+      * `openssl req -new -key admin.key -subj "/CN=kube-admin/O=system:masters" -out admin.csr`
+      * CN could be anything but remember that this is the name that the kubectl client authenticates with and when you run the kubectl command. 
     * CN could be anything but remember that this is the name that the kubectl client authenticates with and when you run the kubectl command. 
-    * Provide a relevant name in this field
-  * Generate a signed cert
-    * `openssl x509 -req -in admin.csr -CA ca.crt -CAkey ca.key -out admin.crt`
+      * CN could be anything but remember that this is the name that the kubectl client authenticates with and when you run the kubectl command. 
+      * Provide a relevant name in this field
+    * Generate a signed cert
+      * `openssl x509 -req -in admin.csr -CA ca.crt -CAkey ca.key -out admin.crt`
+      * make sure to specify the CA certificate and the CA key since you are signing the cert with the CA key pair. 
     * make sure to specify the CA certificate and the CA key since you are signing the cert with the CA key pair. 
+      * make sure to specify the CA certificate and the CA key since you are signing the cert with the CA key pair. 
+      * Signed cert is now outputted to the `admin.crt` file. 
     * Signed cert is now outputted to the `admin.crt` file. 
+      * Signed cert is now outputted to the `admin.crt` file. 
+      * That is the cert the admin user will use to authenticate to the kubernetes cluster. 
     * That is the cert the admin user will use to authenticate to the kubernetes cluster. 
+      * That is the cert the admin user will use to authenticate to the kubernetes cluster. 
+  * Whole process of generating a key and a cert pair is similar to creating a user account for a new user. 
 * Whole process of generating a key and a cert pair is similar to creating a user account for a new user. 
+  * Whole process of generating a key and a cert pair is similar to creating a user account for a new user. 
+    * Cert is the validated user id and the key is like the password. 
+
+  * This is for admin user, how do you differentiate this user from any other users? User account needs to be identified as an admin user and not just another basic user
+    * Do this by adding the group details for the user in the certificate. In this case a group named `SYSTEM:MASTERS` exists on kubernetes with administrative privileges.
+    * Know that you must mention this in certificate signing request.
+    * Can do this by adding group details with the `OU parameter` while generating a CSR
+
+
+  * Follow same process to generate client certificates for all other components that access the kube-api server. 
+
+  * **Kube scheduler** is a system component part of the kubernetes control plan so name must be prefixed with keyword `system`
+    * Same with `Kube-controller-manager` and `kube-proxy`
+  * Follow the same procedure to create the remaining 3 client certificates for the apiservers and kubelets when we create the server certs for them.
+    * set them aside for now. 
+
+#### What to Do
+  * Take admin user for example:
+    * Can use the cert instead of a user and password in a REST API call you make to the `kube-apiserver`
+    * `curl https://kube-apiserver:6443/api/v1/pods --key admin.key --cert admin.crt --cacert ca.crt`
+    * Can also move all of these parameters into a configuration file called `kube-config.yaml`
+  * `kube-config.yaml`
+  * ```yaml
+      apiVersion: v1
+      clusters:
+        - cluster:
+            certificate-authority: ca.crt
+            server: https://kube-apiserver:6443
+        name: kubernetes
+        kind: Config
+        users:
+          - name: kubernetes-admin
+            user:
+              client-certificate: admin.crt
+              client-key: admin.key
+    ```
+  
+* In order for the client to validate the cert sent by the server and vice-versa, they all need a copy of the the CA's public cert(the one that we said is already installed within the user's browsers in case of a web application)
+* In Kubernetes, for these components to verify each other, they all need a copy of the CA's root certificate.
+  * Whenever you configure a server or a client with certificates, you need to specify the CA root cert as well.
+  * ![CA-root-cert](/images/ca-root-cert.jpg)
+
+#### Server Certificate Creation
+
+* Start with the **ETCD Server**:
+  * follow same procedure as before to generate a cert for ETCD. 
+  * Name it `ETCD-SERVER`
+  * ETCD Server can be deployed as a cluster across multiple servers as in a high availability environment. 
+    * To secure communication between the different members in the cluster we must generate additional peer certificates. Once the certs are generated, specify them while starting the ETCD server. 
+      * `cat etcd.yaml` 
+      * There are key and cert file options where you specify the etcdserver keys. 
+      * There are other options available for specifying peer certs
+        * requires the CA root certificate to verify the clients connecting to the ETCD server are valid. 
+      * ![etcd-cert-root-args](/images/etcd-server-cert-args.jpg)
+
+* *Kube-apiserver* now
+  * Generate a certificate for the API server like before 
+    * But API server is the most popular of all components within the cluster
+    * Everyone talks to kube-api server
+    * every operation goes through the kube-api server
+    * Anything moves within the cluster, the API server knows about it. 
+    * The real name is kube-api server but some call it `kubernetes`
+      * kube-apiserver _IS_ kubernetes
+      * Some like to call it `kubernetes.default`
+      * Others call it `kubernetes.default.svc.cluster.local`
+      * Finally it is also referred to in some places simply by its IP address, the IP address of the host running the kube-api server or the pod running it. 
+    * All of those names must be present in the certificate generated for the kube-api server
+    * So we use same sort of commands as ealier to generate a key
+      * `openssl genrsa -out apiserver.key 2048`
+      * `openssl req -new -key apiserver.key -subj "/CN=kube-apiserver" -out apiserver.csr -confg openssl.cnf`
+      * Create an openssl config file and specify the alternate names in the alt name section of the file. 
+        * `openssl.cnf`
+        * ```conf
+           [req]
+           req_extensions = v3_req
+           [ v3_req ]
+           basicConstraints = CA:FALSE
+           keyUsage = nonRepudiation
+           subjectAltName = @alt_names
+           [alt_names]
+           DNS.1 = kubernetes
+           DNS.2 = kubernetes.default
+           DNS.3 = kubernetes.default.svc
+           DNS.4 = kubernetes.default.svc.cluster.local
+           IP.1 = 10.96.0.1
+           IP.2 = 172.17.0.87
+          ```
+        * Then pass this config file as an option while generating the CSR
+        * Finally sign the cert using the CA certificate and key. 
+          * `openssl x509 -req -in apiserver.csr -CA ca.crt -CAkey ca.key -out apiserver.crt`
+
+* **Key Location**
+  * location fo these certs are passed in to the kube-apiserver's executable or service configuration file.
+  * First the CA file needs to be passed in
+    * `--client-ca-file=/var/lib/kubernetes/ca.pem \\`
+    * Remember every component needs the CA certificate to verify its clients
+  * Then we provide the apiserver certificates under the tls-cert options
+    * `--tls-cert-file=/var/lib/kubernetes/apiserver.crt \\`
+    * `--tls-private-key-file=/var/lib/kubernetes/apiserver.crt \\`
+  * We then specify the client certificates used by the kube-api server to connect to the etcd server
+    * With the CA File
+    * `--etcd-cafile=/var/lib/kubernetes/ca.pem \\`
+    * `--etcd-certfile=/var/lib/kubernetes/apiserver-etcd-client.crt \\`
+    * `--etcd-keyfile=/var/lib/kubernetes/apiserver-etcd-client.key \\`  
+  * ![kube-api-cert-locations](/images/kube-api-cert-locations.jpg)
+
+* **Kubelet Server**
+  * HTTPS API server that runs on each node, responsible for managing the node. 
+  * Need a key-cert pair foreach node in the cluster. 
+    * The certs are named after their nodes, not the kubelet.
+      * `node01`, `node02`, `node03`
+    * Once the certificates are created, use them in the kubelet-config file
+      * specify the root CA certificate. then provide the kubelet node certificates
+      * Must do this for each node in the cluster. 
+    * `kubelet-config.yaml (node01)`
+    ```yaml
+    kind: kubeletConfiguration
+    apiVersion: kubelet.config.k8s.io/v1beta1
+    authentication:
+      x509:
+        clientCAFile: "/var/lib/kubernetes/ca.pem"
+    authorization:
+      mode: Webhook
+    clusterDomain: "cluster.local"
+    clusterDNS:
+      - "10.32.0.10"
+    podCIDR: "${POD_CIDR}"
+    resolvConf: "/run/systemd/resolve/resolv.conf"
+    runtimeRequestTimeout: "15m"
+    tlsCertFile: "/var/lib/kubelet/node01.crt"
+    tlsPrivateKeyFile: "/var/lib/kubelet/node01.key" 
+    ```
+  ![kubelet-config-yaml](/images/kubelet-config-yaml.jpg)
+
+  * Also talked about a set of client certificates used by the Kube-api server. 
+    * Used by the kubelet to authenticate into the kube-api server. Need to be generated as well
+    * Name the certs:
+      * system + node + nodename: `system:node:node03`
+    * Api gives permissions by being added to a group named `system:node`
+    * Once the cerst are generated, they go into the kube-config files
 
 
 
+## View Certificate Details
+
+* you join a new team to help them manage their kubernetes environment and you're new admin to the team and have been told that there are multiple issues related to certificates in the environment so you're asked to perform a health check of all the certificates in the entire cluster. What do you do? 
+  * First you must know how the cluster was set up: 
+    * "The Hard Way"
+      * You generate all the certificates by yourself like we did in the previous lecture
+        * `cat /etc/systemd/system/kube-apiserver.service`
+        * you deploy all the components as native services on the nodes.
+    * kubeadm
+      * Takes care of automatically generating and configuring the cluster for you
+      * Kubeadm deploys them as nodes
+        * `cat /etc/kubernetes/mainfests/kube-apiserver.yaml`
+    *  ![where-to-look-kubeadm-hard](/images/cert-locations-kubeadm-hard.jpg)
+* Going to look at a cluster provisioned by kubeadm
 
 
+### Health Check
+* In order to perform a health check start by identifying all the certs used in the system.
+  * (view [sample-excel-spreadsheet](/useful-tools/kubernetes-certs-checker.xlsx) for helpful tips)
+  * Idea is to create a list of cert files used and their pods.
+    * Names configured on them
+    * Alternate names configured if any
+    * Organization the cert belongs to
+    * The issuer of cert
+    * Expiration date on the certificate. 
+  * Start with the certificate files used: 
+    * in an environment set up by kubeadm, look for the kube-apiserver definition file under `/etc/kubernetes/manifests` folder
+    * `cat /etc/kubernetes/manifests/kube-apiserver.yaml`
+    * identify the cert file used for each purpose and note it down
+    * Then take each cert and look inside it for more details about that cert
+      * ie start with the apiserver cert file. 
+      * run `openssl x509 -in /etc/kubernetes/pki/apiserver.crt -text -noout` to view details
+        * Start with the name on the certificate under the subject section, then the alternate names
+        * Then check the validity section of the cert to identify the expiriry date. 
+        * Then the issuer of the cert.
+          * should be the CA who issued the certificate. Kubernetes CA names the CA `kubernetes`
+        * ![view-cert-details](/images/view-cert-details.jpg)
+    * follow same procedure about all the other certificates
+    * Things to look for:
+      * check to make sure you have the right names
+      * check for the right alt names
+      * make sure the certs are part of the correct organization 
+      * most importantly issued by the right issuer and aren't expired. 
+    * Certificate requirements are listed in detail in the kubernetes documenation page. 
+      * check the references section for the link
+  * When you run into issues, you want to start looking at logs. 
+    * If you set up the cluster by your self from scratch and the services are configured as native services in the OS, you want to start looking at the service logs using the operating systems logging functinality 
+      * `journalctl -u etcd.service -l`
+    * If you set up cluster using kubeadm, various components are deployed as pods.
+      * you can look at the logs using the `kubectl logs` + `pod name`
+      * Sometimes if the core components(kubernetes api server or the etcd server) are down. the kubectl commands won't function. 
+        * then you have to go one level down, to docker 
+          * `docker ps -a`, then `docker logs [container id]`
 
 
 
@@ -3041,6 +3260,8 @@ spec:
 
 * `kubectl get deployments` 
   * gives you the number of applications running currently. 
+
+
 
 # End Table of Contents
 1. [Table of Contents](#table-of-contents)
@@ -3161,10 +3382,16 @@ spec:
          2. [Back to Certs](#back-to-certs)
       2. [TLS In Kubernetes](#tls-in-kubernetes)
          1. [Server Certificates for Servers](#server-certificates-for-servers)
-         2. [Client Certificates for Clients](#client-certificates-for-clients)
+         2. [Server Certificates for Servers](#server-certificates-for-servers-1)
+         3. [Server Certificates for Servers](#server-certificates-for-servers-2)
+         4. [Client Certificates for Clients](#client-certificates-for-clients)
       3. [TLS Certificate Creation](#tls-certificate-creation)
          1. [Certificate Authority Cert Creation](#certificate-authority-cert-creation)
          2. [Generating Client's Certificates](#generating-clients-certificates)
+         3. [What to Do](#what-to-do)
+         4. [Server Certificate Creation](#server-certificate-creation)
+   6. [View Certificate Details](#view-certificate-details)
+      1. [Health Check](#health-check)
 7. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)

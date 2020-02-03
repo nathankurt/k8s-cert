@@ -29,6 +29,9 @@
       3. [Secrets](#secrets)
    22. [Multi Container Pods](#multi-container-pods)
    23. [InitContainers](#initcontainers)
+   24. [Cert Config](#cert-config)
+   25. [OpenSSL Config](#openssl-config)
+   26. [Kubelet-Config](#kubelet-config)
 
 # Definitions
 
@@ -741,3 +744,70 @@ spec:
 ```
 
 More Info [here](/notes/core-concepts.md/#initcontainers)
+
+## Cert Config
+
+`kube-config.yaml`
+```yaml
+apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority: ca.crt
+    server: https://kube-apiserver:6443
+  name: kubernetes
+  kind: Config
+  users:
+  - name: kubernetes-admin
+    user:
+      client-certificate: admin.crt
+      client-key: admin.key
+```
+
+More Info [here](/notes/core-concepts.md/#what-to-do)
+
+## OpenSSL Config
+
+`openssl.cnf`
+```conf
+[req]
+req_extensions = v3_req
+[ v3_req ]
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation
+subjectAltName = @alt_names
+[alt_names]
+DNS.1 = kubernetes
+DNS.2 = kubernetes.default
+DNS.3 = kubernetes.default.svc
+DNS.4 = kubernetes.default.svc.cluster.local
+IP.1 = 10.96.0.1
+IP.2 = 172.17.0.87
+```
+
+More Info [here](/notes/core-concepts.md/#server-certificate-creation)
+
+## Kubelet-Config 
+
+`kubelet-config.yaml (node01)`
+```yaml
+kind: kubeletConfiguration
+apiVersion: kubelet.config.k8s.io/v1beta1
+authentication:
+  x509:
+    clientCAFile: "/var/lib/kubernetes/ca.pem"
+authorization:
+  mode: Webhook
+clusterDomain: "cluster.local"
+clusterDNS:
+  - "10.32.0.10"
+podCIDR: "${POD_CIDR}"
+resolvConf: "/run/systemd/resolve/resolv.conf"
+runtimeRequestTimeout: "15m"
+tlsCertFile: "/var/lib/kubelet/node01.crt"
+tlsPrivateKeyFile: "/var/lib/kubelet/node01.key" 
+```
+
+
+More Info [here](/notes/core-concepts.md/#server-certificate-creation)
+
+
