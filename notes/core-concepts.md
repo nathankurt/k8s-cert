@@ -118,7 +118,11 @@
          1. [Asymmetric Encryption](#asymmetric-encryption)
          2. [Back to Certs](#back-to-certs)
       2. [TLS In Kubernetes](#tls-in-kubernetes)
+         1. [Server Certificates for Servers](#server-certificates-for-servers)
+         2. [Client Certificates for Clients](#client-certificates-for-clients)
       3. [TLS Certificate Creation](#tls-certificate-creation)
+         1. [Certificate Authority Cert Creation](#certificate-authority-cert-creation)
+         2. [Generating Client's Certificates](#generating-clients-certificates)
 7. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -2561,7 +2565,7 @@ spec:
       --initial-cluster-token etcd-cluster-1 \
       --initial-advertise-peer-urls https://${INTERNAL_IP}:2380
       ``` 
-    * Initializes a new cluster config and configures the members of ETCD as new members to a new cluster. 
+  * Initializes a new cluster config and configures the members of ETCD as new members to a new cluster. 
       * prevents a new member from accidentally joining an existing cluster. 
       * say for example, you use this backup snapshot to provision a new etcd-cluster for testing purposes,
         * don't want members in new test cluster to accidentally join the production cluster. 
@@ -2786,15 +2790,167 @@ spec:
 
 #### Back to Certs
 
-* Hacker now looks for new ways to hack into your account and realizes the only way is by getting you to type it into a form he presents.
-* So he creates a web site that looks exactly 
+**Scenario**
+
+  * Hacker now looks for new ways to hack into your account and realizes the only way is by getting you to type it into a form he presents.
+  * So he creates a web site that looks exactly like your bank, hosts the website on his own server and generates his own set of public and private key paris and configures them
+  * finally, somehow manages to tweak your environment or your network to route your requests going from bank website to his server
+  * as soon as you send in your credentials, you see a dashboard that doesn't look very much like your bank's dashboard.
 
 
+* What if you could look at the key you received from the server and see if it's a legitimate key from the real bank server.
+  * Real bank doesn't just send the key alone, it sends the certificate. 
+
+* if you take a closer look at the cert, you will see that it is like an actual certificate. 
+  * if bank wants to be known by othe rnames, other names should be specified in the certificate under the `subject alternative name` section.
+* ![cert-example](/images/example-cert.jpg)
+  
+* But anyone can generate a certificate like this.
+  * you could generate one for google and that's what the hacker did in this case
+  * generated a cert saying he is your bank's website. 
+* So how do you look at cert and verify it's legit?  
+  * This is where the most important part of a cert will come into play, **Who Signed the Certificate**
+  * if you generate the cert, then you will have to sign it by yourself
+    * known as a **Self-Signed Certificate**
+  * anyone looking at cert you generated will immediately know that it is not a safe certificate. 
+  * all browsers are built in with a cert validation mechanism where the browser checks the cert received from the server. 
+
+
+* How do you make a legitimate cert for your web servers? 
+  * Certificate Authorities(CAs come into play)
+    * Well known orgs that can sign and validate certificates for you
+      * some of the popular ones are 
+        * Symantec
+        * Digicert
+        * Comodo
+        * GlobalSign
+    * To request a cert from a CA for signing
+      * `openssl req -new -key my-bank.key -out my-bank.csr -subj "/C=US/ST=CA/O=MyOrg, Inc./CN=my-bank.com"`
+        * Validate information, then sign and send the certificate. 
+        * If hacker tried, it would get rejected during the validate stage. 
+
+  * How does browser know Symantc is a valid CA and that the cert was infact signed by Symantec?
+    * The CAs themselves have a set of public and private key pairs. 
+    * The CAs use their pirvate keys to sign the certs and the public keys of the CAs are built in to all of the browsers. 
+    * Browser uses public key of the CA to validate that the cert was actually signed by the CA themselves.
+
+  * However they don't help you validate sites hosted privately say within your organization. 
+    * like payroll or internal email apps.
+    * For that you can host your own private CAs  
+    * Most of the companies there have a private offering of their services: CA server that you can deploy internally within your company. 
+    * You can then have the public key of your internal CA server installed on all your employee browsers and estabilish secure connectivity within your organization
+  
+  * What can the server do to know that the client is who they say they are? Could be a hacker impersonating a user by somehow gaining access to his credentials(not over the network since that's secured over TLS but some other means)
+    *  server can request a certificate from the client. 
+       *  client must generate a pair of keys and a signed certificate from a valid CA the client then sends the certificate to the server for it to verify that the client is who they say they are. 
+       *  TLS client certs aren't normally generated and if they are it's all under the hood. 
+  
+
+  * Naming Conventions:
+    * Usually certs with Public Keys are named `.crt` or `.pem` files. 
+    * Usually certs with private keys are normally `.key` or `-key.pem`
+    ![key-naming-conventions](/images/key-naming-conventions.jpg)
 
 ### TLS In Kubernetes
 
-### TLS Certificate Creation 
+* Kubernetes cluster consists of set of master and worker nodes.
+  * all communications between these nodes must be encrypted and interactions between all services and their clients need to be secure 
+  * For example, administrator interacting with the kubernetes cluster through the kubectl utility or via accessing the kubernetes api directly must establish secure TLS connection.
+* Two Requirements: 
+  * Have all the various servers within the cluster to use server certs
+  * Have all clients to use client certs to verifiy they are who they say they are. 
 
+#### Server Certificates for Servers 
+
+* Kube-apiserver
+  * Exposes an HTTPS service that other components as well as external users use to manage the kubernetes cluster. 
+    * So it is a server and it requires certs to secure all communication with its clients. 
+      * Generate a certificate and key pair. 
+      * Call it `APIserver.crt` and `APIserver.key`
+* ETCD Server stotores all the information abou the cluster so it requires a pair of certificate and keys for itself.
+  * call it `etcdserver.crt` and `etcdserver.key`
+* Other server component is on the worker nodes.
+  * kublet servers but also expose an https api in the point that the Kubeapi server talks to to interact with the worker nodes. 
+    * That requires a certificate and keypair. 
+    * call it `kubelet.crt` and `kubelet.key`
+![server-certs](/images/server-cerrts.jpg)
+
+
+#### Client Certificates for Clients
+  * Clients who access the kube-api server
+    * US, the admins using `kubectl` or `kube-api`
+      * Admin user requires certificate and key pair to authenticate the kube-api server
+        * `admin.crt` and `admin.key`
+    * Scheduler talks to the kube-api server to look for pods that require scheduling and then get the api server to schedule the pods on the right worker nodes.
+      * Scheduler is a client that access the kube-api server. as far as the kube-api server is concerned, scheduler is just another client like the admin user
+      * So the scheduler needs to validate its identify using a client TLS certificate. 
+        * Needs it's own pair of certificate and keys.(`scheduler.crt` and `scheduler.key`)
+    * kube-controller manager is another client that access the kube-api server. so it also requires a certificate for authentication to the kube-api server. (`controller-manager.crt` and `controller-manager.key`)
+    * Last client component is the `kube-proxy`
+      * requires a client certificate to authenticate to hte kube-api server. 
+        * requires its own pair of certificate and keys (`kube-proxy.crt` and `kube-proxy.key`)
+  * Servers communicate amongst them as well
+    * The kube-api server communicates with the ETCD server.
+      * Only server that talks to the ETCD server. so as far as the ETCD server is concerned, the kube-api server is a client. so it needs to authenticate. 
+      * kube-api server can use the same keys that it used earlier for serving its own API service.
+        * Or can generate a new pair of certs specifically for the kube-api server to authenticate to the etcd server. 
+    * Kube-api server also talks to the kubelet server on each of the individual nodes.  
+      * how it monitors the worker nodes.
+   ![client-certs-fun](/images/client-certs-ungrouped.jpg)
+
+  * Grouped certs: 
+    * Set of client certificates mostly used by clients to connect to the kube-api server. 
+      * ![client-certs-kubeapiserver](/images/client-certs-kubeapiserver.jpg)
+    * Set of server-side certificates used by the kube-api server, etcd-server, and kubelet to authenticate their clients.
+      * ![server-certs](/images/server-certs-kubeapiserver.jpg)
+
+
+### TLS Certificate Creation 
+  * Generate these certificates 
+    * Kubernetes requires you to have at least one certificate authority for your cluster. 
+      * you can have more than one. One for all the components in your cluster and another one specifically for ETCD. 
+      * ![certificate-authority-kube](/images/certificate-authority-kube.jpg)
+      * In this case the ETCD server certificates and the ETCD servers client certificates. which in this case is the api-server client certificate will be all signed by the ETCD server CA. 
+      * CA as we konw has its own pair of certificate and key(`ca.crt` and `ca.key`)
+      * ![all-the-certs](/images/all-the-certs.jpg)
+  * Look at how to generate certs
+    * different tools include 
+      * `easyrsa`
+      * `openssl`
+      * `cfssl`
+      * etc.
+
+#### Certificate Authority Cert Creation
+  * First create a private key using the command 
+    * `openssl genrsa -out ca.key 2048`
+  * Then use openssl request command along with key we just created to generate a certificate signing request
+    * `openssl req -new -key ca.key -subj "/CN=KUBERNETES-CA" -out ca.csr`
+    * certificate signing request is like a certificate with all of your details but has no signature. 
+    * In the certificate signing request, we specify:
+      * the name of the component the certificate is for
+      * The common name or CN field. 
+        * In this case since we are creating a certificate for the kubernetes CA, we name it `KUBERNETES-CA`. 
+  * Finally we sign the cert using openssl x509 command
+    * `openssl x509 -req -in ca.csr -signkey ca.key -out ca.crt`
+  ![ca-cert-gen](/images/ca-cert-generation.jpg)
+  * Since this is for the CA itself, it is self-signed by the CA using its own private key that it generated in the first step. 
+    * Going forward for all other certificates, we will use this ca key pair to sign them. 
+
+#### Generating Client's Certificates
+
+* Start with Admin User:
+  * Generate Keys
+    * `openssl genrsa -out admin.key 2048`
+  * CSR(Certificate Signing Request)
+    * `openssl req -new -key admin.key -subj "/CN=kube-admin" -out admin.csr`
+    * CN could be anything but remember that this is the name that the kubectl client authenticates with and when you run the kubectl command. 
+    * Provide a relevant name in this field
+  * Generate a signed cert
+    * `openssl x509 -req -in admin.csr -CA ca.crt -CAkey ca.key -out admin.crt`
+    * make sure to specify the CA certificate and the CA key since you are signing the cert with the CA key pair. 
+    * Signed cert is now outputted to the `admin.crt` file. 
+    * That is the cert the admin user will use to authenticate to the kubernetes cluster. 
+* Whole process of generating a key and a cert pair is similar to creating a user account for a new user. 
 
 
 
@@ -3004,7 +3160,11 @@ spec:
          1. [Asymmetric Encryption](#asymmetric-encryption)
          2. [Back to Certs](#back-to-certs)
       2. [TLS In Kubernetes](#tls-in-kubernetes)
+         1. [Server Certificates for Servers](#server-certificates-for-servers)
+         2. [Client Certificates for Clients](#client-certificates-for-clients)
       3. [TLS Certificate Creation](#tls-certificate-creation)
+         1. [Certificate Authority Cert Creation](#certificate-authority-cert-creation)
+         2. [Generating Client's Certificates](#generating-clients-certificates)
 7. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
