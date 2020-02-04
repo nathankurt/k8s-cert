@@ -32,6 +32,7 @@
    24. [Cert Config](#cert-config)
    25. [OpenSSL Config](#openssl-config)
    26. [Kubelet-Config](#kubelet-config)
+   27. [CertifcateSigningRequest](#certifcatesigningrequest)
 
 # Definitions
 
@@ -811,3 +812,28 @@ tlsPrivateKeyFile: "/var/lib/kubelet/node01.key"
 More Info [here](/notes/core-concepts.md/#server-certificate-creation)
 
 
+## CertifcateSigningRequest
+
+`jane-csr.yaml`
+```yaml
+apiVersion: certificates.k8s.io/v1beta1
+kind: CertificateSigningRequest
+metadata:
+  name: jane
+spec:
+  ##List the groups the user should be part of
+  groups:
+  - system:authenticated
+  ## And usages of the account as a list of strings 
+  usages:
+  - digital signature
+  - key encipherment
+  - server auth
+  # Don't specify request as plain text, instead encode it with 
+  # base64 command Then move encoded text into the request 
+  # field and submit the request once object is created
+  # cat jane.csr | base64
+  request:
+  # cat jane.csr | base64 output
+
+``` 

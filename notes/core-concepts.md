@@ -129,6 +129,7 @@
          4. [Server Certificate Creation](#server-certificate-creation)
    6. [View Certificate Details](#view-certificate-details)
       1. [Health Check](#health-check)
+   7. [Certificates API](#certificates-api)
 7. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -136,6 +137,7 @@
    2. [Check for Port Clashing](#check-for-port-clashing)
    3. [Create all the files in a folder](#create-all-the-files-in-a-folder)
    4. [Check Number of Applications](#check-number-of-applications)
+   5. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
 8. [End Table of Contents](#end-table-of-contents)
 
 
@@ -3176,6 +3178,89 @@ spec:
         * then you have to go one level down, to docker 
           * `docker ps -a`, then `docker logs [container id]`
 
+## Certificates API
+
+* What's happened so far 
+  * As admin of the cluster in the process of setting up a whole cluster have set up a CA server and a bunch of certificates for various components
+  * Then started the services using the right certificates and it's all up and working
+  * I'm the only admin and user of the cluster
+    * But then new admin comes into my team and needs access to the cluster
+    * We need to get her a pair of certificate and key pair for her to access the cluster
+    * She creates her own private key, and generates a certificate signing request and sends it to me since i'm the only admin
+  * I then take the certificate signing request to my CA server, gets it signed by the CA using the CA servers private key and root certificate, thereby generating a cert. then send it back to her.
+  * She now has her own valid pair of certificate and key that she can use to access the cluster.
+  * The certs have a validated period and it ends after a period of time. 
+    * every time it expires we follow the same process of generating a new CSR and getting it signed by the CA 
+    * So we need to keep rotating the cert files. 
+* What is CA Server, what is it and where is it located? 
+  * CA is just a pair of key and certificate files we have generated and whoever gains access to these pair of files can sign any cert for the kubernetes environment.
+    * can create as many users as they want with whatever privileges they want.
+    * So these files need to be protected and stored in a safe environment.
+    * Say we place them on a server that's fully secure, that server now becomes your CA server. 
+      * Certificate key file is safely stored on that server and only on that server
+      * Every tiem you want to sign a certificate, you can only do it by logging into that CA server
+* As of now, we have the certificates placed on the kubernetes master node itself, so the master node is also our CA server
+* kubeadm tool does the same thing
+  * creates a CA pair of files and stores them on the master node itself
+
+
+* So far we've been signing requests manually but as and when the users increase and team grows, you need automated way to manage the certificates signing requests as well as to rotate certificates when they expire. 
+
+* **This is where Kubernetes built-in Certificates API comes into play**
+  * With the Certificates API, you now send a CSR directly to kubernetes through an API call.
+  * When the admin receives a CSR
+    * **No More** onto the master node and singing the cert by himself
+    * he creates a Kubernetes API object called CertificateSigningRequest
+      * Once object is created, all certificates signing request can be seen by administrators of the cluster. 
+      * Request can be reviewed and approved easily using kubectl commands. 
+      * Cert can then be extracted and shared with the user. 
+      ![certificates-api-process](/images/certificates-api-process.jpg) 
+
+  * Process of how it's done:
+    * A user first creates a key.
+      * `openssl genrsa -out jane.key 2048`
+    * Then sends the request to the admin
+      * `openssl req -new -key jane.key -subj "/CN=jane" -out jane.csr`
+    * admin then takes the key and creates a certificatesigningrequest object via manifest(yaml file)
+      * `jane-csr.yaml`
+      ```yaml
+      apiVersion: certificates.k8s.io/v1beta1
+      kind: CertificateSigningRequest
+      metadata:
+        name: jane
+      spec:
+         ##List the groups the user should be part of
+        groups:
+        - system:authenticated
+         ## And usages of the account as a list of strings 
+        usages:
+        - digital signature
+        - key encipherment
+        - server auth
+         # Don't specify request as plain text, instead encode it with 
+         # base64 command Then move encoded text into the request 
+         # field and submit the request once object is created
+         # cat jane.csr | base64
+        request:
+          # cat jane.csr output
+
+      ``` 
+      * Under specs section, list the groups the user should be part of and usages of the account as a list of strings
+      * Once the object is created, all certificate signing requests can be seen by administrators
+        * `kubectl get csr`
+      * Identify new request and approve by running `kubectl certificate approve [name]`
+        * `kubectl certificate approve jane`
+    * Kubernetes signs the certificate using the CA key pairs and generates a cert for the user.
+      * Can be extracted and shared with the user.
+    * View the certificate by viewing it in a yaml format
+      * `kubectl get csr jane -o yaml`
+      * Find certificate in yaml file, but since it's in base64 format, must decode it
+        * `echo "LS0..Qo=" | base64 --decode`
+      * ![get-cert-file-admin](/images/get-certificate-files-admin.jpg)
+
+
+
+
 
 
 
@@ -3260,6 +3345,10 @@ spec:
 
 * `kubectl get deployments` 
   * gives you the number of applications running currently. 
+
+## Labs to make sure I know better
+  * Cluster Mainencance: `Practice Test - Cluster Upgrades`
+  * Security: `Practice Test - View Certificates`
 
 
 
@@ -3392,6 +3481,7 @@ spec:
          4. [Server Certificate Creation](#server-certificate-creation)
    6. [View Certificate Details](#view-certificate-details)
       1. [Health Check](#health-check)
+   7. [Certificates API](#certificates-api)
 7. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -3399,4 +3489,5 @@ spec:
    2. [Check for Port Clashing](#check-for-port-clashing)
    3. [Create all the files in a folder](#create-all-the-files-in-a-folder)
    4. [Check Number of Applications](#check-number-of-applications)
+   5. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
 8. [End Table of Contents](#end-table-of-contents)
