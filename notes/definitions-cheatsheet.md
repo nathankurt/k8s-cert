@@ -37,6 +37,9 @@
    29. [Role Based Access Controls](#role-based-access-controls)
       1. [Role](#role)
       2. [RoleBinding](#rolebinding)
+   30. [Cluster Roles and Role Bindings](#cluster-roles-and-role-bindings)
+      1. [Role](#role-1)
+      2. [RoleBinding](#rolebinding-1)
 
 # Definitions
 
@@ -923,3 +926,40 @@ roleRef:
 
 More Info [here](/notes/core-concepts.md/#role-based-access-controls)
 
+
+## Cluster Roles and Role Bindings
+
+
+### Role
+
+`cluster-admin-role.yaml`
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-administrator
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["list", "get", "create", "delete"]
+``` 
+
+### RoleBinding
+
+`cluster-admin-role-binding.yaml`
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cluster-admin-role-binding
+subjects:
+- kind: User
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: cluster-administrator
+  apiGroup: rbac.authorization.k8s.io
+```
+
+More Info [here](/notes/core-concepts.md/#cluster-roles-and-role-bindings)

@@ -136,6 +136,7 @@
    9. [API Groups](#api-groups)
    10. [Role Based Access Controls](#role-based-access-controls)
    11. [Cluster Roles and Role Bindings](#cluster-roles-and-role-bindings)
+   12. [Image Security](#image-security)
 7. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -3547,17 +3548,72 @@ spec:
   * Those are cluster-wide resources
   * resources are categorized as either namespaced or cluster scoped. 
 
-* List of Namespaced Resources
-  * Pods
-  * Replicasets
-  * Jobs
-  * Deployments
-  * Services
-  * Secrets
-  * Roles
-  * Rolebindings
-  * ConfigMaps
-  * PVC 
+* List of **Namespaced** Resources
+  * `Pods`
+  * `Replicasets`
+  * `Jobs`
+  * `Deployments`
+  * `Services`
+  * `Secrets`
+  * `Roles`
+  * `Rolebindings`
+  * `ConfigMaps`
+  * `PVC`
+
+* List of **Cluster Scoped** Resources
+  * `Nodes`
+  * `PV`
+  * `Clusterroles`
+  * `clusterrolebindings`
+  * `certificatesigningrequests`
+  * `namespaces`
+
+* Not a comprehensive list of resources. to see full list run 
+  * `kubectl api-resources --namespaced=true`
+  * `kubectl api-resources --namespaced=false`
+
+* How do we authorize users to cluster wide resources like nodes or persistent volumes?
+  * `clusterroles` and `clusterrolebindings`
+
+* Cluster Roles:
+  * Just like roles except they are for a cluster scoped resource
+  * ie. a cluster admin role can be created to provide a cluster admin permissions to view, created, or delete nodes in a cluster. 
+  * Or a storage admin role can be created to authorize a storgae admin to create PVs(Persistent Volumes) and PVCs(Persistent Volume Claims) 
+    `cluster-admin-role.yaml`
+    ```yaml
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+    metadata:
+      name: cluster-administrator
+    rules:
+    - apiGroups: [""]
+      resources: ["nodes"]
+      verbs: ["list", "get", "create", "delete"]
+    ``` 
+
+    `cluster-admin-role-binding.yaml`
+    ```yaml
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
+    metadata:
+      name: cluster-admin-role-binding
+    subjects:
+    - kind: User
+      name: cluster-admin
+      apiGroup: rbac.authorization.k8s.io
+    roleRef:
+      kind: ClusterRole
+      name: cluster-administrator
+      apiGroup: rbac.authorization.k8s.io
+    ```
+
+  * NOTE: You can also create a cluster role for namespace resources as well
+    * when you do that the user will have access to these resources across all namespaces
+
+
+## Image Security
+
+* Start with a simple pod definition file 
 
 
 
@@ -3776,6 +3832,7 @@ spec:
    9. [API Groups](#api-groups)
    10. [Role Based Access Controls](#role-based-access-controls)
    11. [Cluster Roles and Role Bindings](#cluster-roles-and-role-bindings)
+   12. [Image Security](#image-security)
 7. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
