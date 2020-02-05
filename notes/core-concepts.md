@@ -130,6 +130,11 @@
    6. [View Certificate Details](#view-certificate-details)
       1. [Health Check](#health-check)
    7. [Certificates API](#certificates-api)
+   8. [KubeConfig](#kubeconfig)
+      1. [File Format](#file-format)
+      2. [Certificates in KubeConfig](#certificates-in-kubeconfig)
+   9. [API Groups](#api-groups)
+   10. [Role Based Access Controls](#role-based-access-controls)
 7. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -3096,23 +3101,23 @@ spec:
       * specify the root CA certificate. then provide the kubelet node certificates
       * Must do this for each node in the cluster. 
     * `kubelet-config.yaml (node01)`
-    ```yaml
-    kind: kubeletConfiguration
-    apiVersion: kubelet.config.k8s.io/v1beta1
-    authentication:
-      x509:
-        clientCAFile: "/var/lib/kubernetes/ca.pem"
-    authorization:
-      mode: Webhook
-    clusterDomain: "cluster.local"
-    clusterDNS:
-      - "10.32.0.10"
-    podCIDR: "${POD_CIDR}"
-    resolvConf: "/run/systemd/resolve/resolv.conf"
-    runtimeRequestTimeout: "15m"
-    tlsCertFile: "/var/lib/kubelet/node01.crt"
-    tlsPrivateKeyFile: "/var/lib/kubelet/node01.key" 
-    ```
+    * ```yaml
+      kind: kubeletConfiguration
+      apiVersion: kubelet.config.k8s.io/v1beta1
+      authentication:
+        x509:
+          clientCAFile: "/var/lib/kubernetes/ca.pem"
+      authorization:
+        mode: Webhook
+      clusterDomain: "cluster.local"
+      clusterDNS:
+        - "10.32.0.10"
+      podCIDR: "${POD_CIDR}"
+      resolvConf: "/run/systemd/resolve/resolv.conf"
+      runtimeRequestTimeout: "15m"
+      tlsCertFile: "/var/lib/kubelet/node01.crt"
+      tlsPrivateKeyFile: "/var/lib/kubelet/node01.key" 
+      ```
   ![kubelet-config-yaml](/images/kubelet-config-yaml.jpg)
 
   * Also talked about a set of client certificates used by the Kube-api server. 
@@ -3223,28 +3228,27 @@ spec:
       * `openssl req -new -key jane.key -subj "/CN=jane" -out jane.csr`
     * admin then takes the key and creates a certificatesigningrequest object via manifest(yaml file)
       * `jane-csr.yaml`
-      ```yaml
-      apiVersion: certificates.k8s.io/v1beta1
-      kind: CertificateSigningRequest
-      metadata:
-        name: jane
-      spec:
-         ##List the groups the user should be part of
-        groups:
-        - system:authenticated
-         ## And usages of the account as a list of strings 
-        usages:
-        - digital signature
-        - key encipherment
-        - server auth
-         # Don't specify request as plain text, instead encode it with 
-         # base64 command Then move encoded text into the request 
-         # field and submit the request once object is created
-         # cat jane.csr | base64
-        request:
-          # cat jane.csr output
-
-      ``` 
+      * ```yaml
+          apiVersion: certificates.k8s.io/v1beta1
+          kind: CertificateSigningRequest
+          metadata:
+            name: jane
+          spec:
+              ##List the groups the user should be part of
+            groups:
+            - system:authenticated
+              ## And usages of the account as a list of strings 
+            usages:
+            - digital signature
+            - key encipherment
+            - server auth
+              # Don't specify request as plain text, instead encode it with 
+              # base64 command Then move encoded text into the request 
+              # field and submit the request once object is created
+              # cat jane.csr | base64
+            request:
+              # cat jane.csr output
+          ``` 
       * Under specs section, list the groups the user should be part of and usages of the account as a list of strings
       * Once the object is created, all certificate signing requests can be seen by administrators
         * `kubectl get csr`
@@ -3259,17 +3263,252 @@ spec:
       * ![get-cert-file-admin](/images/get-certificate-files-admin.jpg)
 
 
+  * All certificate related operations are carried out by the controller manager.
+  * If you look closely at the controller or manager you will see controller called `csr-approving`, `csr-signing`, etc.
+    * Responsible for carrying out those specific tasks
+  * We know that if anyone has to sign certificates, they need the CA servers root certificates and private key. 
+    * Controller manager service configuration has two options where you can specify this.
+      * ![controller-manager-csr](/images/controller-manager-csr.jpg)
+
+
+## KubeConfig
+
+* Can call the kubernetes rest API using curl(cluster named my-kube-playground in this case)
+  * `curl https://my-kube-playground:6443/api/v1/pods --key admin.key --cert admin.crt --cacert ca.crt`
+    * this is then validated by the API server to authenticate the user
+* You can do the same thing use kubectl though too
+  * ```conf 
+    kubectl get pods
+      --server my-kube-playground:6643
+      --client-key admin.key
+      --client-certificate admin.crt
+      --certificate-authority ca.crt
+    ```
+* Typing that in though each time is a tedious task, so move that info to a config file called kubeconfig.
+  * Specify this file as the `--kubeconfig config` option
+  * By default the kubectl tool looks for a file named `config` under the directory `$HOME/.kube/`
+  * So if you create a file there, you dont have to specify the paths to the file explicity with the kubectl command
+    * that's why we haven't been doing that so far. 
+
+### File Format
+  * KubeConfig File is in a specific format, 
+  * Config file has three sections:
+    1. **Clusters**
+       * The various kubernetes clusters you need access too 
+         * So multiple clusters for dev environment or prod
+         * Or for different orgs
+         * Or for different cloud providers etc.
+    2. **Users**
+       * The user accounts with which you have access to these clusters. 
+         * admin user, dev user, prod user
+         * may have different privileges on different clusters
+    3. **Contexts**
+       *  Define which user account will be used to access which cluster
+          * could create a context  named "admin@production that will use the admin account to access prod cluster
+          * want to access the cluster I have setup on Google with the devusers credentials to test deploying the application i built. 
+          * You aren't creating any new users or configuring any kind of user access/authorization of the cluster
+  
+    * Server specification in above command goes into the cluster section
+    * Admin users, keys and certs goes into users section
+    * Then create a context that specifies to use the MyKubeAdmin user to access the MyKubePlayground cluster.
+    * ![kube-config-architecture](/images/kube-config-architecture.jpg)
+  * Kube Config File is in yaml format
+   * ```yaml
+          apiVersion: v1
+          kind: Config
+          #Selects the default context to use
+          current-context: my-kube-admin@my-kube-playground
+          #Each of these things is in an array format 
+          #so you can specify multiple clusters
+          clusters:
+          - name: my-kube-playground
+            cluster:
+              certificate-authority: ca.crt
+              server: https://my-kube-playground:6443
+
+
+          contexts:
+          - name: my-kube-admin@my-kube-playground
+            context: 
+              cluster: my-kube-playground #name of cluster above
+              user: my-kube-admin #name of user below
+
+          users:
+          - name: my-kube-admin
+            user:
+              client-certificate: admin.crt
+              client-key: admin.key
+     ```
+ * Rinse and repeat for other clusters and users that you use. + context
+ * ![kube-config-yaml-vals-hidden](/images/kube-config-yaml.jpg)
+
+ * **Don't Have to Do kubectl create**
+
+* How does kubectl know which context to choose from? 
+  * You can specify the default context to use by adding a field `current-context` to the kubeconfig file
+* To view the config file, `kubectl config view`
+  * lists clusters, contexts, and users, as well as the current-context set.
+* Can also specify a kubeconfig file by running `kubectl config view --kubeconfig=my-custom-config`
+* Update current context:
+  * Change context to use prod-user to access the production cluster.
+    * run `kubectl config use-context prod-user@production`
+    * Changes made by this config command show up in the file also. 
+    * You can make other changes in the file, and update or delete items in it using other variations of the kubectl config command. 
+
+**Namespaces**
+   * ```yaml
+          apiVersion: v1
+          kind: Config
+          #Selects the default context to use
+          current-context: my-kube-admin@my-kube-playground
+          #Each of these things is in an array format 
+          #so you can specify multiple clusters
+          clusters:
+          - name: production
+            cluster:
+              certificate-authority: ca.crt
+              server: https://172.17.0.51:6443
+
+
+          contexts:
+          - name: admin@production
+            context: 
+              cluster: production #name of cluster above
+              user: admin #name of user below
+              # can add namespace here as well. 
+              namespace: finance
+
+          users:
+          - name: admin
+            user:
+              client-certificate: admin.crt
+              client-key: admin.key
+     ```
 
 
 
+### Certificates in KubeConfig
+* When using certificates path, it's better to use the full path. 
+  * instead of `ca.crt` use `/etc/kubernetes/pki/ca.crt`
+  * instead of `admin.crt` for client-cert use `/etc/kubernetes/pki/users/admin.crt`
+  * instead of `admin.key` for client-key use `/etc/kubernetes/pki/users/admin.key`
+
+* instead of using `certificate-authority:` with a path you can use `certificate-authority-data:` field
+  * convert the contents to a base64 encoded file `cat ca.crt | base64` and then pass that in. 
+  * ![certs-in-kubeconfig](/images/certificates-kubeconfig.jpg)
 
 
+## API Groups
+
+* So far we have been interacting with the API server either through kubectl or directly.
+* Say we want to check the version.
+  * We can access the api server at the master node's address, followed by the version
+    * `curl https://kube-master:6443/version`
+* If you want to get a list of pods, you would access the url, api/v1/pods
+  * `curl https://kube-master:6443/api/v1/pods`
+
+* Focus is about these API paths. The /version and /api. The Kubernetes API is grouped in multiple groups based on their purpose.
+  * `/metrics`
+    * Monitor the health of the cluster
+  * `/healthz`
+    * monitor the health of the cluster
+  * `/version`
+    * for viewing the version of the cluster
+  * `/api`
+  * `/apis`
+  * `/logs`
+    * integrating with third party logging utilities
+  * etc.
+
+* `/api`(Core Group) vs `/apis`(Named Group)
+  * Core Group:
+    * /v1
+      * namespaces
+      * pods
+      * rc
+      * events
+      * bindings
+      * configmaps
+      * pods
+      * endpoints
+      * PV
+      * PVC
+      * secrets
+      * nodes
+      * services
+    * ![api-core](/images/api-core.jpg)
+  * Named Group:
+    * More Organized and going forward all the newer features will be here
+    * ![apis-named](/images/apis-named.jpg)
+
+* Kubernetes API v1.16(the current exam version) reference page found here [https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.16](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.16/)
+* Select an object and the first section in the documentation page, shows its group details
+  * can also view these on your kubernetes cluster. 
+    * `curl http://localhost:6443 -k` will list available groups
+    * `curl http://localhost:6443 -k | grep "name"` will list all supported resource groups
+    * you have to authenticate for just about everything but version
+      * use your cert and pass them in the command line like this:
+        * `curl http://localhost:6443 -k --key admin.key --cert admin.crt --cacert ca.crt`
+    * Alternate option is to start a kubectl proxy client
+      * `kubectl proxy` launches a proxy service locally on port 8001 and uses credentials and certificates from your kubeconfig files so you don't have to specify those in the curl command
+        * can access it with `curl http://localhost:8001 -k` and proxy will use the credentials from kube-confg file to forward your request to the kube apiserver
+        * will list all available apis at root. 
+    * **Kube Proxy != kubectl proxy**
+      * kube proxy is used to enable connectivity between pods and services across different nodes in the cluster. 
+      * kubectl proxy is an http proxy service created by kubectl utility to access the kubeapi server. 
+  
+  * All resources in kubernetes are grouped into different API groups
+    * in the top level you have `core api group` and `named api group`
+      * under the `named api group` you have one for each section 
+        * Under these api groups you have the different resources 
+          * each resource has a set of associated actions(aka verbs) 
 
 
+## Role Based Access Controls
+
+* Create a role by creating a "Role object"
+* `developer-role.yaml`
+    ```yaml
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: Role
+    metadata:
+      name: developer
+    rules:
+    - apiGroups: [""]
+      resources: ["pods"]
+      verbs: ["list", "get", "create", "update", "delete"]
+     
+      #Rule to allow developers to create config maps
+    - apiGroups: [""]
+      resources: ["ConfigMap"]
+      verbs: ["create"]    
+    ```
+    `kubectl create -f developer-role.yaml`
 
 
+* Each rule has three sections - apiGroups, resources, and verbs
+  * For Core Group, you can leave apiGroups section as blank, For any other group(Named), you speciy the group name
+  * The resources that we want to give devs access to
+  * The verb list of things that they can do to that resource
 
-
+* Next step is to link the user to that role.
+* Create another object called `Role Binding` 
+  * Links a user object to a role
+  * `devuser-developer-binding.yaml`
+    ```yaml
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    metadata:
+      name: devuser-developer-binding
+    subjects:
+    - kind: User
+      name: dev-user
+      apiGroup: rbac.authorization.k8s.io
+    roleRef:
+      kind: Role
+      name: developer
+      apiGroup: rbac.authorization.k8s.io
+    ```
 
 
 
@@ -3482,6 +3721,11 @@ spec:
    6. [View Certificate Details](#view-certificate-details)
       1. [Health Check](#health-check)
    7. [Certificates API](#certificates-api)
+   8. [KubeConfig](#kubeconfig)
+      1. [File Format](#file-format)
+      2. [Certificates in KubeConfig](#certificates-in-kubeconfig)
+   9. [API Groups](#api-groups)
+   10. [Role Based Access Controls](#role-based-access-controls)
 7. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)

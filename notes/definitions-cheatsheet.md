@@ -33,6 +33,10 @@
    25. [OpenSSL Config](#openssl-config)
    26. [Kubelet-Config](#kubelet-config)
    27. [CertifcateSigningRequest](#certifcatesigningrequest)
+   28. [KubeConfig](#kubeconfig)
+   29. [Role Based Access Controls](#role-based-access-controls)
+      1. [Role](#role)
+      2. [RoleBinding](#rolebinding)
 
 # Definitions
 
@@ -837,3 +841,81 @@ spec:
   # cat jane.csr | base64 output
 
 ``` 
+
+More Info [here](/notes/core-concepts.md/#certificates-api)
+
+## KubeConfig
+
+`config` or `my-config.yaml` but config is the default where you don't have to use a create
+```yaml
+apiVersion: v1
+kind: Config
+#Selects the default context to use
+current-context: my-kube-admin@my-kube-playground
+#Each of these things is in an array format 
+#so you can specify multiple clusters
+clusters:
+- name: production
+  cluster:
+    certificate-authority: ca.crt
+    server: https://172.17.0.51:6443
+
+
+contexts:
+- name: admin@production
+  context: 
+    cluster: production #name of cluster above
+    user: admin #name of user below
+    # can add namespace here as well. 
+    namespace: finance
+
+users:
+- name: admin
+  user:
+    client-certificate: admin.crt
+    client-key: admin.key
+```
+
+More Info [here](/notes/core-concepts.md/#file-format)
+
+## Role Based Access Controls
+
+### Role
+
+`developer-role.yaml`
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["list", "get", "create", "update", "delete"]
+  
+  #Rule to allow developers to create config maps
+- apiGroups: [""]
+  resources: ["ConfigMap"]
+  verbs: ["create"]    
+```
+
+### RoleBinding
+
+`devuser-developer-binding.yaml`
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devuser-developer-binding
+subjects:
+- kind: User
+  name: dev-user
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: developer
+  apiGroup: rbac.authorization.k8s.io
+```
+
+More Info [here](/notes/core-concepts.md/#role-based-access-controls)
+
