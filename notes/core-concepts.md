@@ -135,6 +135,7 @@
       2. [Certificates in KubeConfig](#certificates-in-kubeconfig)
    9. [API Groups](#api-groups)
    10. [Role Based Access Controls](#role-based-access-controls)
+   11. [Cluster Roles and Role Bindings](#cluster-roles-and-role-bindings)
 7. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -142,7 +143,8 @@
    2. [Check for Port Clashing](#check-for-port-clashing)
    3. [Create all the files in a folder](#create-all-the-files-in-a-folder)
    4. [Check Number of Applications](#check-number-of-applications)
-   5. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
+   5. [Inspect Authorization Types](#inspect-authorization-types)
+   6. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
 8. [End Table of Contents](#end-table-of-contents)
 
 
@@ -3501,19 +3503,61 @@ spec:
     metadata:
       name: devuser-developer-binding
     subjects:
+     #where we specify the user details
     - kind: User
       name: dev-user
       apiGroup: rbac.authorization.k8s.io
     roleRef:
+      #where we provide the details of the role we creatd
       kind: Role
       name: developer
       apiGroup: rbac.authorization.k8s.io
     ```
 
+    * Fall in the scope of namespaces so here, the dev-user gets access to pods and configmaps within the default namespace
+    * If you want to limit the dev users access within a different nameppace, then specify the namespace within the metadata of definition file
+
+ * To View created roles:
+   * `kubectl get roles`
+ * To list role bindings:
+   * `kubectl get rolebindings`
+ * To get more details about the role
+   * `kubectl describe role developer`
+ * To get more details about rolebindings
+   * `kubectl describe rolebinding devuser-developer-binding`
+
+* If you, a user want to see if you have access to a particular resource in the cluster
+  * `kubectl auth can-i`
+    * `kubectl auth can-i create deployments`
+    * `kubectl auth can-i delete nodes`
+  * If you are admin and want to see if you have access as a user
+    * `kubectl auth can-i create deployments --as dev-user`
+    * `kubectl auth can-i create pods --as dev-user`
+    * `kubectl auth can-i create pods --as dev-user --namespace test`
+   
+
+* Resource Names
+  * You can restrict access to specific resources with `resourceNames: ["blue", "orange"]` or whatever resource names are
+  * ![role-resource-names](/images/roles-resource-names.jpg) 
 
 
+## Cluster Roles and Role Bindings
 
+* Can put some resources in a namespace, but you can't put nodes into a namespace
+  * Those are cluster-wide resources
+  * resources are categorized as either namespaced or cluster scoped. 
 
+* List of Namespaced Resources
+  * Pods
+  * Replicasets
+  * Jobs
+  * Deployments
+  * Services
+  * Secrets
+  * Roles
+  * Rolebindings
+  * ConfigMaps
+  * PVC 
 
 
 
@@ -3584,6 +3628,11 @@ spec:
 
 * `kubectl get deployments` 
   * gives you the number of applications running currently. 
+
+## Inspect Authorization Types
+
+* `kubectl describe pod kube-apiserver-master -n kube-system` 
+  * look for `--authorization-modes`
 
 ## Labs to make sure I know better
   * Cluster Mainencance: `Practice Test - Cluster Upgrades`
@@ -3726,6 +3775,7 @@ spec:
       2. [Certificates in KubeConfig](#certificates-in-kubeconfig)
    9. [API Groups](#api-groups)
    10. [Role Based Access Controls](#role-based-access-controls)
+   11. [Cluster Roles and Role Bindings](#cluster-roles-and-role-bindings)
 7. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -3733,5 +3783,6 @@ spec:
    2. [Check for Port Clashing](#check-for-port-clashing)
    3. [Create all the files in a folder](#create-all-the-files-in-a-folder)
    4. [Check Number of Applications](#check-number-of-applications)
-   5. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
+   5. [Inspect Authorization Types](#inspect-authorization-types)
+   6. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
 8. [End Table of Contents](#end-table-of-contents)

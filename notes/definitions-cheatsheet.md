@@ -892,6 +892,8 @@ rules:
 - apiGroups: [""]
   resources: ["pods"]
   verbs: ["list", "get", "create", "update", "delete"]
+  #You can select the names of the pods people have access to
+  resourceNames: ["blue", "orange"]
   
   #Rule to allow developers to create config maps
 - apiGroups: [""]
@@ -907,10 +909,12 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: devuser-developer-binding
+#Where we specify the user details
 subjects:
 - kind: User
   name: dev-user
   apiGroup: rbac.authorization.k8s.io
+#where we provide the details of the role we created
 roleRef:
   kind: Role
   name: developer
