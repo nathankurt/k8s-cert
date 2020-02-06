@@ -139,7 +139,15 @@
    12. [Image Security](#image-security)
    13. [Security Context](#security-context)
    14. [Network Policy](#network-policy)
-7. [Quick Notes](#quick-notes)
+      1. [Traffic Basics](#traffic-basics)
+      2. [Network Security in Kubernetes](#network-security-in-kubernetes)
+7. [Storage](#storage)
+   1. [Storage In Docker](#storage-in-docker)
+      1. [Docker Layered Architecture](#docker-layered-architecture)
+      2. [Volumes](#volumes)
+   2. [Container Storage Interface](#container-storage-interface)
+      1. [What CSI Looks Like](#what-csi-looks-like)
+8. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
       2. [Edit Deployments](#edit-deployments)
@@ -149,7 +157,7 @@
    5. [Inspect Authorization Types](#inspect-authorization-types)
    6. [Check to see which user is used to execute a process](#check-to-see-which-user-is-used-to-execute-a-process)
    7. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
-8. [End Table of Contents](#end-table-of-contents)
+9. [End Table of Contents](#end-table-of-contents)
 
 
 Core Concepts
@@ -2439,7 +2447,7 @@ spec:
       * just marks a node as unschedulable but doesn't terminate or move pods on existing node. 
 
 ## Kubernetes Software Versions
-* We know that when we install a kubernetes cluster, we install a specific version of kubernetes that we can see when we run the `kubectl get pods` 
+* We know that when we install a kubernetes cluster, we install a specific version of kubernetes that we can see when we run the `kubectl get nodes` 
 
 * Release Versions consist of three parts  
   * Major version - `1`.11.3
@@ -2550,8 +2558,10 @@ spec:
 *Upgrade Worker Nodes*
   * `kubectl drain node-1`
   * ssh into worker node
-  * `apt-get upgrade -y kubeadm=1.12.0-00`
+  * `ssh node1 apt-get upgrade -y kubeadm=1.12.0-00`
+    * if that doesn't work `ssh node1 apt install -y kubeadm=1.12.0-00`
   * `apt-get upgrade -y kubelet=1.12.0-00`
+    * if that doesn't work `ssh node1 apt install -y kubelet=1.12.0-00`
 
 
 ## Backup and Restore Methods
@@ -3727,10 +3737,247 @@ spec:
 
 ## Network Policy
 
+### Traffic Basics
+
+* Start with an example of traffic flowing through web and app database server
+  * Have a web server serving front-end to users and an app server serving back-end API and a db server.
+  * The user sent in a request to the web server at `port 80` and the web server then sent a request to the API server at `port 5000`. The API server then fetches data from the db server at `port 3306` and then sends the data back to the user.
+  ![application-traffic-example](/images/application-traffic-example.jpg) 
+  * Very simple setup two types of traffic here:
+    * ingress - incoming requests
+    * Egress -outgoing requests
+  * To get it working, would need these rules:
+    * ![ingress-egress-rules](/images/ingress-egress-rules.jpg)
+
+### Network Security in Kubernetes
+
+  **Example**
+
+  * Have a cluster with a set of nodes hosting a set of pods and services
+    * Each node has an IP address and so does each pod as well as service
+  * Pre-req for networking in kubernetes: 
+    * Whatever solution you implement, the pods should be able to communicate with each other without having to configure any additional settings like routes. 
+    * In this network solution, all pods are on a Virtual Private Network that spans across the nodes in the kubernetes cluster. And they can all **by default**  reach each other using the IPs or pod names or services configured for that purpose.
+    * [network-vpc](/images/network-vpc.jpg)
+
+Back to Earlier Application Traffic Example
+
+* By default all the Pods(Web Pod, API Pod, and DB pod) can communicate with each other. 
+  * What if we don't want the front-end web server to be able to communicate with the datatbase server directly. 
+  * Where You would implement a network policy
+  * Another Object in the kubernetes namespace
+    * just like PODs, ReplicaSets, or Services
+    * Can link a network policy to one or more pods
+      * In this case, would say only allow ingress Traffic from the API Pod on Port 3306
+      * Once created it blocks all other traffic to the Pod and only allows traffic that matches the specified rule
+      * Only applicable to the Pod on which the network policy is applied
+    * Use Labels and Selectors to link them to pods
+      * label the pod and use the same labels on the podSelector filed in the nework policy
+        ```yaml
+        labels:
+          role: db
+        ```
+        ```yaml
+        podSelector:
+          matchLabels:
+              role: db
+        ```
+
+    * Network Policy - Rules:
+
+    ```yaml
+     #Rule to allow Ingress Traffic
+     #FROM API POD on Port 3306
+    policyTypes:
+    - Ingress
+    ingress:
+    - from:
+      - podSelector:
+          matchLabels:
+            name: api-pod
+      ports:
+      - protocol: TCP
+        port: 3306  
+    ```
+
+    `policy-definition.yaml`
+    ```yaml
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: db-policy
+
+    spec:
+      podSelector:
+        matchLabels:
+          role: db
+      #Rule to allow Ingress Traffic
+     #FROM API POD on Port 3306
+      policyTypes:
+      - Ingress
+      ingress:
+      - from:
+        - podSelector:
+            matchLabels:
+              name: api-pod
+        ports:
+        - protocol: TCP
+          port: 3306  
+    ```
+
+    `kubectl create -f policy-definition.yaml`
+
+  * **NOTE**
+    * Network Polcies are enforced by the Network Solution implemented on the Kubernetes Cluster and not all solutions support network polcies
+      * Support: 
+        * Kube-router
+        * Calico
+        * Romana
+        * Weave-net
+      * Don't Support:
+        * Flannel
+    * If something doesn't support it, you can still create the policies, but they will just not be enforced
+      * Won't get an error message saying the network solution doesn't support network policies
+  
+  * Make a Network Policy that accepts Egress Traffic to 3306 for mysql and payroll to 8080
+    ```yaml
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: internal-policy
+      namespace: default
+    spec:
+      podSelector:
+        matchLabels:
+          name: internal
+      policyTypes:
+      - Egress
+      - Ingress
+      ingress:
+        - {}
+      egress:
+      - to:
+        - podSelector:
+            matchLabels:
+              name: mysql
+        ports:
+        - protocol: TCP
+          port: 3306
+
+      - to:
+        - podSelector:
+            matchLabels:
+              name: payroll
+        ports:
+        - protocol: TCP
+          port: 8080
+    ```
 
 
+# Storage
+
+## Storage In Docker
+* Two concepts
+  * Storage Drivers
+  * Volume Drivers
+* File System:
+  * When you install docker on a system, it creates the folder structure at `/var/lib/docker`
+    * You have multiple folders under it like 
+    * `aufs`
+    * `containers`
+    * `image`
+    * `volumes`
+  * This is where docker stores all of it's data
+    * data means files related to images and containers running on the docker host for example
+
+### Docker Layered Architecture
+
+* When docker builds images, it builds them in a layered architecture
+  * Each line of instruction in the dockerfile creates a new layer in the docker image with just the changes from the previous layer
+  * Since Each layer is built one at a time, it can save space and be reused by other, similar images and can rebuild things from the cache much faster.
+  * ![docker-layered-architecture](/images/docker-layered-architecture.jpg)
+
+* Once build is complete, you cannot modify the contents of those layers so they are Read Only.
+
+* When you run a `docker run` command, docker creates a container based off of these layers and creates a new writeable layer on top of the image layer.
+  * used to store data created by the container such as log files by the applications
+  * Any temp files generated by the container or just any 
+  * Life of this layer is only as long as container is alive
+
+![docker-containers-layerd](/images/docker-container-layer.jpg)
 
 
+### Volumes
+* What if we wished to persist the data
+  *  We can create a persistant volume. stored in `/var/lib/docker/volumes/data_volumes`
+  *  When you want to attach it run
+     *  `docker run -v [volume_name]:[location-inside-container] [image name]`
+     *  `docker run -v data_volume:/var/lib/mysql mysql`
+  *  Will create a new container and mount the data volume we created into `/var/lib/mysql` folder inside the container
+* If you had some external storage already, then you would run
+  * `docker run -v [path to folder you want to mount]:[location-inside-container] [image name]`
+  * Called `bind mounting`
+![volume-docker-mount](/images/docker-volume-mount.jpg)
+
+
+* **Storage Drivers** are responsible for creating a visible layer moving files across layers to enable copy and write. 
+  * Common Storage Drivers:
+    * AUFS
+    * ZFS
+    * BTRFS
+    * Device Mapper
+    * Overlay
+    * Overlay2
+
+  * Docker will choose best storage drivers by OS automatically.
+
+**Volume Driver Plugins in Docker**
+* Remember- volumes are not handled by storage drivers
+  * Handled by volume driver plugins
+    * Local
+    * Azure File Storage
+    * Convoy
+    * DigitalOcean Block Storage
+    * Flocker
+    * gce-docker
+    * GlusterFS
+    * NetApp
+    * RexRay
+    * Portworx
+    * VMware vSphere Storage
+    * plus more
+  * When you run a docker container, you can choose to use a specific volume driver with `--volume-driver [driver-name]`
+
+## Container Storage Interface
+* In the past, Kubernetes used docker along as the container runtime engine and all the code to work with Docker was embedded within the kubernetes source code
+* With other container runtime coming in such as rocket and cryo, important to open up and work with different container runtimes and not be dependent on kubernetes source code
+* That's how Container Runtime Interface came to be
+  * Standard that defines how an orchestration solution like kubernetes would communicate with container runtimes like docker
+* So if in the future if any container runtime interface is developed, they can just follow the CRI standards and that new container runtime would work with kubernetes without having to work with the kubernetes team or developers or touch the kubernetes source code. 
+
+* Also introduced Container Networking Interface(CNI)
+* And Container Storage Interface(CSI)
+
+* ![CSI](/images/csi-kube.jpg)
+
+* Note that CSI is not a kubernetes specific standard. 
+  * Meant to be a universal standard and if implementd allows any container orchestration tool to work with any storage vendor with a supported plugin. 
+  * Currently, Kubernetes, Cloud Foundry, and Mesos are on board with CSI
+
+### What CSI Looks Like
+
+* Defines a set of Remote Procedure Calls(RPCs) that will be called by the container orchestartor and these must be implemented by the storage drivers.
+  * Example: CSI Says that when a pod is created and requires a volume, the container orchestrator, in this case kubernetes, should call the `CreateVolume` RBC 
+    * and pass a set of details such as the volume name
+    *  the storage driver should implement this RPC and handle the request and provision a new volume on the storage array and return the results of the operation
+  * Similarly, the container orchestaror should call the delete volume RPC whenever a volume is to be deleted
+    * and the storage drive should implement the code to decommission the volume from the array when that call is made
+    * Also specification details exactly what parameters should be sent by the caller. 
+    * What should be recieved by the solution
+    * what error codes should be made
+* More Info on CSI Specs [here](https://github.com/container-storage-interface/spec)
+
+![csi-standards](/images/csi-standard.jpg)
 
 
 
@@ -3804,6 +4051,7 @@ spec:
 
 ## Labs to make sure I know better
   * Cluster Mainencance: `Practice Test - Cluster Upgrades`
+  * Backup and Restore Methods: `Practice Test - Backup and Restore Methods`
   * Security: `Practice Test - View Certificates`
 
 
@@ -3947,7 +4195,15 @@ spec:
    12. [Image Security](#image-security)
    13. [Security Context](#security-context)
    14. [Network Policy](#network-policy)
-7. [Quick Notes](#quick-notes)
+      1. [Traffic Basics](#traffic-basics)
+      2. [Network Security in Kubernetes](#network-security-in-kubernetes)
+7. [Storage](#storage)
+   1. [Storage In Docker](#storage-in-docker)
+      1. [Docker Layered Architecture](#docker-layered-architecture)
+      2. [Volumes](#volumes)
+   2. [Container Storage Interface](#container-storage-interface)
+      1. [What CSI Looks Like](#what-csi-looks-like)
+8. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
       2. [Edit Deployments](#edit-deployments)
@@ -3957,4 +4213,4 @@ spec:
    5. [Inspect Authorization Types](#inspect-authorization-types)
    6. [Check to see which user is used to execute a process](#check-to-see-which-user-is-used-to-execute-a-process)
    7. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
-8. [End Table of Contents](#end-table-of-contents)
+9. [End Table of Contents](#end-table-of-contents)
