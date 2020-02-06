@@ -137,6 +137,8 @@
    10. [Role Based Access Controls](#role-based-access-controls)
    11. [Cluster Roles and Role Bindings](#cluster-roles-and-role-bindings)
    12. [Image Security](#image-security)
+   13. [Security Context](#security-context)
+   14. [Network Policy](#network-policy)
 7. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -145,7 +147,8 @@
    3. [Create all the files in a folder](#create-all-the-files-in-a-folder)
    4. [Check Number of Applications](#check-number-of-applications)
    5. [Inspect Authorization Types](#inspect-authorization-types)
-   6. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
+   6. [Check to see which user is used to execute a process](#check-to-see-which-user-is-used-to-execute-a-process)
+   7. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
 8. [End Table of Contents](#end-table-of-contents)
 
 
@@ -3613,13 +3616,116 @@ spec:
 
 ## Image Security
 
-* Start with a simple pod definition file 
+* Start with a simple pod definition file, 
+    ```yaml
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: nginx-pod
+    spec:
+      containers:
+      - name: nginx
+        image: nginx  
+    ```
 
+  * Look at `image: nginx`
+    * What is this image and where is it pulled from?
+      * Follows Docker's image naming convention:
+        * `Nginx` her is the image or the repo name:
+          * When you type `nginx` it's actually the same `nginx/nginx`
+          * The first part stands for the user or account name, then the image/repository
+          * since we haven't specified location, assumed to be from dockerhub aka `docker.io`
+          ![image-naming-convention](/images/image-naming-convention.jpg)
+          * Many other popular registries. 
+          * All publically accessible images that anyone can download and access
+  * When you have apps built in-house that shouldn't be made available to the public, hosting an internal private registry may be a good idea. 
+    * Many cloud providers like AWS, Azure or GCP provide a private registry for your cloud account by default. 
+    * On any of these solution, you can make a repo private so that it can be accessed using a set of credentials
+    * For docker, run `docker login private-registry.io` to login
 
+    * To run a pod with a private repo, replace the image name with the full path to the one in the private registry
+      
+    ```yaml
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: nginx-pod
+    spec:
+      containers:
+      - name: nginx
+        #private repo
+        image: private-registry.io/apps/internal-app
+      imagePullSecrets:
+      #Specify the secret here
+      - name: regcred
+    ```
 
+    * How do you pass the credentials to the docker runtime on the worker node?
+      * first create a secret object with the credentials in it
+         ```
+         kubectl create secret docker-registry regcred \
+            --docker-server=private-registry.io \
+            --docker-username=registry-user \
+            --docker-password=registry-password \
+            --docker-email=registry-user@org.com  
+          ```
+        * Then pod created on the worker node uses the credentials from the secret to pull images
+        
 
+## Security Context
 
+* When you run a docker container, you have the option to define a set of security standards 
+* such as the ID of the user used to run the container
+* Linux capabilities that can be added or removed from the container etc.
+  * `docker run --user=1001 ubuntu sleep 3600`
+  * `docker run --cap-add MAC_ADMIN ubuntu`
+* Can also be configured in kubernetes
+  * Can choose to configure the security settings at a container level or at a pod level. 
+    *  If you configure it a pod level, settings will carry over to all containers in the pod
+    *  Settings on the container will override the settings on the pod. 
 
+      ```yaml
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: web-pod
+      spec:
+         ############################
+        securityContext:
+          #sets the user id for the pod
+          runAsUser: 1000
+          ###########################
+        containers:
+          - name: ubuntu
+            image: ubuntu
+            command: ["sleep", "3600"] 
+
+      ```
+
+      To set the same thing for the container level, move it under the containers option
+
+      ```yaml
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: web-pod
+      spec:
+        containers:
+          - name: ubuntu
+            image: ubuntu
+            command: ["sleep", "3600"] 
+            ############################
+            securityContext:
+            #sets the user id for the pod
+              runAsUser: 1000
+              #CAPABILITIES ARE ONLY SUPPORTED AT CONTAINER LEVEL
+              capabilities:
+                add: ["MAC_ADMIN"]
+            ###########################
+
+      ```
+
+## Network Policy
 
 
 
@@ -3689,6 +3795,12 @@ spec:
 
 * `kubectl describe pod kube-apiserver-master -n kube-system` 
   * look for `--authorization-modes`
+
+## Check to see which user is used to execute a process 
+
+* `kubectl exec ubuntu-sleeper whoami`
+  * will give you the user that is executing the command on the pod named ubuntu sleeper
+  * 
 
 ## Labs to make sure I know better
   * Cluster Mainencance: `Practice Test - Cluster Upgrades`
@@ -3833,6 +3945,8 @@ spec:
    10. [Role Based Access Controls](#role-based-access-controls)
    11. [Cluster Roles and Role Bindings](#cluster-roles-and-role-bindings)
    12. [Image Security](#image-security)
+   13. [Security Context](#security-context)
+   14. [Network Policy](#network-policy)
 7. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -3841,5 +3955,6 @@ spec:
    3. [Create all the files in a folder](#create-all-the-files-in-a-folder)
    4. [Check Number of Applications](#check-number-of-applications)
    5. [Inspect Authorization Types](#inspect-authorization-types)
-   6. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
+   6. [Check to see which user is used to execute a process](#check-to-see-which-user-is-used-to-execute-a-process)
+   7. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
 8. [End Table of Contents](#end-table-of-contents)
