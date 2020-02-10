@@ -116,6 +116,11 @@
    5. [Persistent Volume Claims](#persistent-volume-claims)
    6. [Using Persistent Volume Claims in PODS](#using-persistent-volume-claims-in-pods)
 7. [Networking](#networking)
+   1. [Switching Routing](#switching-routing)
+      1. [Switching](#switching)
+      2. [Routing](#routing)
+      3. [Gateway](#gateway)
+         1. [Default Gateway](#default-gateway)
 8. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -4151,7 +4156,56 @@ When you have alot of users with a lot of pods, the users would have to configur
 
 # Networking
 
+## Switching Routing
 
+### Switching
+
+* Have two computers, `A` and `B`. How does `A` reach `B`? 
+  * Connect them to a switch and the switch creates a network containing the two systems. 
+  * To connect them to a switch, need an interface on each host(physical or virutal depening on the host)
+    * to see interfaces of the host use `ip link` command
+  * Assume it's a network with the address `192.168.1.0`
+    * Then assign the systems with IP addresses on the same network
+      * `ip addr add 192.168.1.10/24 dev eth0`
+  * ![networking-ip-link](/images/networking-ip-link.jpg)
+  * Switch can only enable communication within a network
+
+### Routing
+* Say we have another network containing systems C & D at address 192.168.2.0
+  * systems have IP addresses 192.168.2.10 and 192.168.2.11 respectively
+  * How does a system B reach system C? that's on a different network? 
+  * This is where a Router comes in. 
+    * A router helps connect two networks together. it is an intelligent device so think of it as another server with many network ports
+      * since it connects the two it gets two IPs assigned. 
+      * Assign it an IP address of `192.168.1.1` and `192.168.2.1`
+    * Now we have a router connected to the two networks that can enable communication between them.
+    * How does it konw where the router is on the network to send the packet through.
+      * the router is just another device on the network.
+    * ![networking-routing](/images/networking-routing.jpg)
+
+### Gateway
+  * That's where we configure the devices with a gateway or a route. 
+  * If the network was a room, the gateway is a door to the outside room. Systems need to know where the door is to go through. 
+  * To see the existing routing configuration run the `route` command.
+    * displays the kernels routing table and within that there are no routing configurations currently
+    * In this condition, system B will not be able to reacvh System C. It can only reach other systems within the same network in the range 192.168.1.0
+  * To configure a gateway on system B to reach the systems on network 192.168.2.0 run
+    * `ip route add 192.168.2.0/24 via 192.168.1.1` 
+    * ![networking-gateway](/images/networking-gateways.jpg)
+    * running the `route` command again shows that we have a route added to reach the 192.168.2.0 series network through the router.
+  * This has to be configured on all the systems 
+    * For example if the system C is to send a packet to system B, then you need to add a route on system C's routing table to access network `192.168.1.0` trhough the router configured with the IP address `192.168.2.1`
+      * `ip route add 192.168.1.0/24 via 192.168.2.1` 
+
+
+#### Default Gateway
+* Now suppose these systems need access to the internet. Say they need to acceess google at 172.217.194.0 so you connect the router to the internet and then add a new rout in your outing table to route all traffic to the network 172.217.194 through your router
+* So many different sites on different networks on the internet.
+* intead of adding a routing table entry for these same routers IP address for each of those networks, 
+  * you can simply say for any network that you don't know a route to, use this router as the default gateway
+    * `ip route add default via 192.168.2.1`
+  * So in a simple setup like this, all you need is a single entry in your routing table with the default gateway set to the roluters IP address.
+    * instad of the word `default`, you can also say `0.0.0.0` which means any IP address.  
 
 # Quick Notes
 
@@ -4337,6 +4391,11 @@ When you have alot of users with a lot of pods, the users would have to configur
    5. [Persistent Volume Claims](#persistent-volume-claims)
    6. [Using Persistent Volume Claims in PODS](#using-persistent-volume-claims-in-pods)
 7. [Networking](#networking)
+   1. [Switching Routing](#switching-routing)
+      1. [Switching](#switching)
+      2. [Routing](#routing)
+      3. [Gateway](#gateway)
+         1. [Default Gateway](#default-gateway)
 8. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
