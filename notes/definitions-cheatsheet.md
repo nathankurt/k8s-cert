@@ -40,6 +40,7 @@
    30. [Cluster Roles and Role Bindings](#cluster-roles-and-role-bindings)
       1. [Role](#role-1)
       2. [RoleBinding](#rolebinding-1)
+   31. [Volumes and Mounts](#volumes-and-mounts)
 
 # Definitions
 
@@ -963,3 +964,39 @@ roleRef:
 ```
 
 More Info [here](/notes/core-concepts.md/#cluster-roles-and-role-bindings)
+
+## Volumes and Mounts
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: random-number-generator
+spec:
+  containers:
+  - image: alpine
+    name: alpine
+    command: ["/bin/sh", "-c"]
+    args: ["shuf -i 0-100 -n 1 >> /opt/number.out;"] 
+    #################################################################
+    #After volume is created, to access it from a container we 
+    #mount the volume to a directory inside the container
+    volumeMounts:
+      #now random number will be written to /opt
+      #inside the container which happens the data volume
+      #which is infact the data directory on the host
+      #when pod is delete, file still lives on the host
+      - mountPath: /opt
+        name: data-volume 
+  
+    #To retain the random number, you need this volume
+  volumes:
+  - name: data-volume
+    #configure storage to use a directory on the host 
+    #any files created in the volume would be stored in the 
+    #directory dtta on my node
+    hostPath:
+      path: /data
+      type: Directory
+  ######################################################################  
+```

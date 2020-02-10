@@ -113,40 +113,9 @@
    4. [Backup and Restore Methods](#backup-and-restore-methods)
       1. [Resource Configuration Backup](#resource-configuration-backup)
       2. [Backup - ETCD](#backup---etcd)
-   5. [TLS](#tls)
-      1. [TLS Basics](#tls-basics)
-         1. [Asymmetric Encryption](#asymmetric-encryption)
-         2. [Back to Certs](#back-to-certs)
-      2. [TLS In Kubernetes](#tls-in-kubernetes)
-         1. [Server Certificates for Servers](#server-certificates-for-servers)
-         2. [Server Certificates for Servers](#server-certificates-for-servers-1)
-         3. [Server Certificates for Servers](#server-certificates-for-servers-2)
-         4. [Client Certificates for Clients](#client-certificates-for-clients)
-      3. [TLS Certificate Creation](#tls-certificate-creation)
-         1. [Certificate Authority Cert Creation](#certificate-authority-cert-creation)
-         2. [Generating Client's Certificates](#generating-clients-certificates)
-         3. [What to Do](#what-to-do)
-         4. [Server Certificate Creation](#server-certificate-creation)
-   6. [View Certificate Details](#view-certificate-details)
-      1. [Health Check](#health-check)
-   7. [Certificates API](#certificates-api)
-   8. [KubeConfig](#kubeconfig)
-      1. [File Format](#file-format)
-      2. [Certificates in KubeConfig](#certificates-in-kubeconfig)
-   9. [API Groups](#api-groups)
-   10. [Role Based Access Controls](#role-based-access-controls)
-   11. [Cluster Roles and Role Bindings](#cluster-roles-and-role-bindings)
-   12. [Image Security](#image-security)
-   13. [Security Context](#security-context)
-   14. [Network Policy](#network-policy)
-      1. [Traffic Basics](#traffic-basics)
-      2. [Network Security in Kubernetes](#network-security-in-kubernetes)
-7. [Storage](#storage)
-   1. [Storage In Docker](#storage-in-docker)
-      1. [Docker Layered Architecture](#docker-layered-architecture)
-      2. [Volumes](#volumes)
-   2. [Container Storage Interface](#container-storage-interface)
-      1. [What CSI Looks Like](#what-csi-looks-like)
+   5. [Persistent Volume Claims](#persistent-volume-claims)
+   6. [Using Persistent Volume Claims in PODS](#using-persistent-volume-claims-in-pods)
+7. [Networking](#networking)
 8. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -3773,46 +3742,21 @@ Back to Earlier Application Traffic Example
       * Only applicable to the Pod on which the network policy is applied
     * Use Labels and Selectors to link them to pods
       * label the pod and use the same labels on the podSelector filed in the nework policy
-        ```yaml
-        labels:
-          role: db
-        ```
-        ```yaml
-        podSelector:
-          matchLabels:
-              role: db
-        ```
+          ```yaml
+          labels:
+            role: db
+          ```
+          ```yaml
+          podSelector:
+            matchLabels:
+                role: db
+          ```
 
     * Network Policy - Rules:
 
-    ```yaml
-     #Rule to allow Ingress Traffic
-     #FROM API POD on Port 3306
-    policyTypes:
-    - Ingress
-    ingress:
-    - from:
-      - podSelector:
-          matchLabels:
-            name: api-pod
-      ports:
-      - protocol: TCP
-        port: 3306  
-    ```
-
-    `policy-definition.yaml`
-    ```yaml
-    apiVersion: networking.k8s.io/v1
-    kind: NetworkPolicy
-    metadata:
-      name: db-policy
-
-    spec:
-      podSelector:
-        matchLabels:
-          role: db
-      #Rule to allow Ingress Traffic
-     #FROM API POD on Port 3306
+      ```yaml
+          #Rule to allow Ingress Traffic
+          #FROM API POD on Port 3306
       policyTypes:
       - Ingress
       ingress:
@@ -3823,7 +3767,32 @@ Back to Earlier Application Traffic Example
         ports:
         - protocol: TCP
           port: 3306  
-    ```
+      ```
+
+    `policy-definition.yaml`
+      ```yaml
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: db-policy
+
+      spec:
+        podSelector:
+          matchLabels:
+            role: db
+        #Rule to allow Ingress Traffic
+      #FROM API POD on Port 3306
+        policyTypes:
+        - Ingress
+        ingress:
+        - from:
+          - podSelector:
+              matchLabels:
+                name: api-pod
+          ports:
+          - protocol: TCP
+            port: 3306  
+      ```
 
     `kubectl create -f policy-definition.yaml`
 
@@ -3840,38 +3809,38 @@ Back to Earlier Application Traffic Example
       * Won't get an error message saying the network solution doesn't support network policies
   
   * Make a Network Policy that accepts Egress Traffic to 3306 for mysql and payroll to 8080
-    ```yaml
-    apiVersion: networking.k8s.io/v1
-    kind: NetworkPolicy
-    metadata:
-      name: internal-policy
-      namespace: default
-    spec:
-      podSelector:
-        matchLabels:
-          name: internal
-      policyTypes:
-      - Egress
-      - Ingress
-      ingress:
-        - {}
-      egress:
-      - to:
-        - podSelector:
-            matchLabels:
-              name: mysql
-        ports:
-        - protocol: TCP
-          port: 3306
+      ```yaml
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: internal-policy
+        namespace: default
+      spec:
+        podSelector:
+          matchLabels:
+            name: internal
+        policyTypes:
+        - Egress
+        - Ingress
+        ingress:
+          - {}
+        egress:
+        - to:
+          - podSelector:
+              matchLabels:
+                name: mysql
+          ports:
+          - protocol: TCP
+            port: 3306
 
-      - to:
-        - podSelector:
-            matchLabels:
-              name: payroll
-        ports:
-        - protocol: TCP
-          port: 8080
-    ```
+        - to:
+          - podSelector:
+              matchLabels:
+                name: payroll
+          ports:
+          - protocol: TCP
+            port: 8080
+      ```
 
 
 # Storage
@@ -3977,14 +3946,210 @@ Back to Earlier Application Traffic Example
     * what error codes should be made
 * More Info on CSI Specs [here](https://github.com/container-storage-interface/spec)
 
-![csi-standards](/images/csi-standard.jpg)
+  * ![csi-standards](/images/csi-standard.jpg)
+
+
+## Volumes
+
+**Start with Volumes in Docker First**
+  * Docker containers are meant to be short lived by nature.
+    * called upon when they are required to process data and destroyed once finished.
+    * Same is true for the data within the container.
+      *  Data is destroyed along with the container to persist data processed by the containers.
+  * To persist data processed by the containers, we attach a volume when they are created.
+  * Data processed by the container is now placed in this volume thereby retaining it permanently
+  * Even if container is deleted, data generated remains
+
+**Bringing it to the Kubernetes World**
+  * Just like Docker, the POD's created in Kubernetes are transient in nature.
+    * When a POD is created to process data and then deleted, the data processed by it gets deleted as well
+  * For this, we attach a volume to the POD. The data generated by the POD is now stored in the volume, and even after the pod is delted, data remains
+
+**Simple Implementation of Volumes**
+* Have a simple pod that generates a random number between 1 and 100 and writes that to a file
+    ```yaml
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: random-number-generator
+    spec:
+      containers:
+      - image: alpine
+        name: alpine
+        command: ["/bin/sh", "-c"]
+        args: ["shuf -i 0-100 -n 1 >> /opt/number.out;"] 
+        #After volume is created, to access it from a container we 
+        #mount the volume to a directory inside the container
+        volumeMounts:
+          #now random number will be written to /opt
+          #inside the container which happens the data volume
+          #which is infact the data directory on the host
+          #when pod is delete, file still lives on the host
+          - mountPath: /opt
+            name: data-volume 
+      
+      #To retain the random number, you need this volume
+      volumes:
+      - name: data-volume
+        #configure storage to use a directory on the host 
+        #any files created in the volume would be stored in the 
+        #directory dtta on my node
+        hostPath:
+          path: /data
+          type: Directory
+      
+    ```
+
+  * When you create a volume, you can choose to configure it's storage in different ways.
+  
+
+  * Volume Storage Options: 
+    * Use a host path option to configure a directory and the host has storage space for the volume
+      * works fine on one node, but is not recommended for use in a multi node cluster
+        * Because nodes would use `/data` directory on all nodes and expect them to be the same and have the same data since they are on different servers.
+        * They aren't the same though unless you configure some kind of external replicated cluster storage solution.
+    * Supports several types of standard storage solutions such as 
+      * NFS
+      * glusterFS
+      * Flocker
+      * FibreChannel
+      * CephFS
+      * ScaleIO
+      * AWS EBS
+      * Azure Disk or File
+      * Google's Persistent Disk
+    
+    * To configure an AWS EBS volume as the storage or the volume, 
+      * replace `hostPath:` field of the volume with `awsElasticBlockStore:` along with the `volumeID` and filesystem type(`fsType`
+          ```yaml
+          volumes:
+          - name: data-volume
+            awsElasticBlockStore:
+              volumeID: <volume-id>
+              fsType: ext4
+          ```
+
+## Persistent Volumes
+
+When you have alot of users with a lot of pods, the users would have to configure storage every time for each pod. Whatever storage solution is used, the users who deploys the pods would have to configure that on all pod definition files in their own environment every time a change is to be made. 
+
+* Would like it to be configured in a way that an admin can create a large pool of storage
+  * This is where persistent volumes can help
+
+* A persistent volume is a cluster wide pool of storage volumes configured by an administrator to be used by users deploying applications on the clusers.
+![persistent-volumes](/images/persistent-volumes.jpg) 
+
+* Create a persistent Volume
+`pv-definition.yaml`
+  ```yaml
+  apiVersion: v1
+  kind: PersistentVolume
+  metadata: 
+    name: pv-vol1
+
+  spec:
+  #################################
+    accessModes:
+
+      - ReadWriteOnce
+    #- ReadWriteMany
+    #- ReadOnlyMany
+
+    capacity:
+      storage: 1Gi
+
+    #don't use this option in a prod environment
+    hostPath:
+      path: /tmp/data
+  ######################################
+  ```
+
+* Then run `kubectl create -f pv-definition.yaml`
+`kubectl get persistentvolume`
+
+* Replace the hostPath option with one of the supported storage solutions
+
+  ```yaml
+  awsElasticBlockStore:
+    volumeID: <volume-id>
+    fsType: ext4
+  ```
+
+## Persistent Volume Claims
+* An **Administrator** creates a set of Persistent Volumes
+* **User** creates Persistent Volume Claims to use the storage.
+
+* Once the Persistent Volume Claims are created, Kubernetes binds the Persistent Volumes to Claims based on the request and properties set on the volume. 
+* Every Persistent Volume Claims is bound to a single Persistent volume
+* during the binding process, kubernetes tries to find a persistent volume that has sufficient capacity as requested by the claim and any other request properties such as `access modes`, `volume modes`, `storage class`, etc.
+  * If there are multiple possible matches for a single claim and you would like to specifically use a particular volume, use labels and selectors
+    * ![binding-pv-pvc](/images/binding-pv-pvc.jpg)
+* Note that a smaller claim may get bound to a larger volume if all the other criteria matches and there are no better options.
+  * There is a one to one relationship between claims and volumes
+    * So no other claims can utilize the remaining capacity in the volume.
+  * If there are no volumes available, the PVC will remain in a pending state until newer volumes are made available to the cluster
+    * once available, the claim would auto be bound to the newly available volume 
+    `pvc-definition.yaml`
+      ```yaml
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: myclaim
+      spec:
+        accessModes:
+          - ReadWriteOnce
+
+        resources:
+          requests:
+            storage: 500Mi
+
+      ```
+
+`kubectl create -f pvc-definition.yaml`
+`kubectl get persistentvolumeclaim`
+
+* When claim is created it looks at available PVs and since accessModes match but capacity requested is less than capacity
+  * since it's only PV available it binds to it. 
+
+* To delete PVC run `kubectl delete persistentvolumeclaim myclaim` command
+  * What happens to PV when PVC s deleted? 
+    * You can choose what happens when PVC is deleted with `persistentVolumeReclaimPolicy: Retain`
+      * By default PV is set to retain(will remain until manually delted by the admin)
+        * not available for reuse by any other claims
+      * or it can beleted automatically with `persistentVoilumeReclaimPolicy: Delete`
+      * Or third option, data can be Recycled with `persistentVolumeClaimReclaimPolicy: Recycle`
+        * data in the data volume will be scrubbed before making it available to other claims.
+
+
+## Using Persistent Volume Claims in PODS
+  
+* Once you create a PVC, use it in a pod definition file by specifying the PVC Claim name under persistentVolumeClaim Section in the volumes like this: 
+
+    ```yaml
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: mypod
+    spec:
+      containers:
+        - name: myfrontend
+          image: nginx
+          volumeMounts:
+          - mountPath: "/var/www/html"
+            name: mypd
+      volumes:
+        - name: mypod
+          persistentVolumeClaim:
+            claimName: myclaim
+    ```
+
+    * Same is true for ReplicaSets or Deployments
+      * Add this to the pod template section of a Deployment or ReplicaSet
+  More Info [here](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#claims-as-volumes)
 
 
 
-
-
-
-
+# Networking
 
 
 
@@ -4169,40 +4334,9 @@ Back to Earlier Application Traffic Example
    4. [Backup and Restore Methods](#backup-and-restore-methods)
       1. [Resource Configuration Backup](#resource-configuration-backup)
       2. [Backup - ETCD](#backup---etcd)
-   5. [TLS](#tls)
-      1. [TLS Basics](#tls-basics)
-         1. [Asymmetric Encryption](#asymmetric-encryption)
-         2. [Back to Certs](#back-to-certs)
-      2. [TLS In Kubernetes](#tls-in-kubernetes)
-         1. [Server Certificates for Servers](#server-certificates-for-servers)
-         2. [Server Certificates for Servers](#server-certificates-for-servers-1)
-         3. [Server Certificates for Servers](#server-certificates-for-servers-2)
-         4. [Client Certificates for Clients](#client-certificates-for-clients)
-      3. [TLS Certificate Creation](#tls-certificate-creation)
-         1. [Certificate Authority Cert Creation](#certificate-authority-cert-creation)
-         2. [Generating Client's Certificates](#generating-clients-certificates)
-         3. [What to Do](#what-to-do)
-         4. [Server Certificate Creation](#server-certificate-creation)
-   6. [View Certificate Details](#view-certificate-details)
-      1. [Health Check](#health-check)
-   7. [Certificates API](#certificates-api)
-   8. [KubeConfig](#kubeconfig)
-      1. [File Format](#file-format)
-      2. [Certificates in KubeConfig](#certificates-in-kubeconfig)
-   9. [API Groups](#api-groups)
-   10. [Role Based Access Controls](#role-based-access-controls)
-   11. [Cluster Roles and Role Bindings](#cluster-roles-and-role-bindings)
-   12. [Image Security](#image-security)
-   13. [Security Context](#security-context)
-   14. [Network Policy](#network-policy)
-      1. [Traffic Basics](#traffic-basics)
-      2. [Network Security in Kubernetes](#network-security-in-kubernetes)
-7. [Storage](#storage)
-   1. [Storage In Docker](#storage-in-docker)
-      1. [Docker Layered Architecture](#docker-layered-architecture)
-      2. [Volumes](#volumes)
-   2. [Container Storage Interface](#container-storage-interface)
-      1. [What CSI Looks Like](#what-csi-looks-like)
+   5. [Persistent Volume Claims](#persistent-volume-claims)
+   6. [Using Persistent Volume Claims in PODS](#using-persistent-volume-claims-in-pods)
+7. [Networking](#networking)
 8. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
