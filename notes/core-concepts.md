@@ -2596,7 +2596,7 @@ spec:
    *  The ETCD cluster stores information about the state of our cluster. So info about the cluster itself, the nodes and every other resource as created within the cluster are stored here.
    * So instead of backing up resources, may choose to backup the ETCD server itself. 
    * hosted on master nodes. 
-   * data directory that configured to store all the data can be configured to be backed up by your backup tool.
+   * data directory that configured to store all the data can be configured to be backed up by your backup too"l.
    * Also comes with a builtin snapshot tool by using `etcdctl` 
      * `etcdctl snapshot save snapshot.db` snapshot file is created in current directory
      * `etcdctl snapshot status snapshot.db` to view status of the backup. 
