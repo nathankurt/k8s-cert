@@ -761,13 +761,16 @@ spec:
             image: nginx
       ```
   #### Create Namespace Like
-   `namespace-dev.yml`
-    ```yaml
-    apiVersion: v1
-    kind: Namespace
-    metadata:
-      name: dev
-    ```
+
+
+  `namespace-dev.yml`
+
+  ```yaml
+  apiVersion: v1
+  kind: Namespace
+  metadata:
+    name: dev
+  ```
     * `kubectl create -f namespace-dev.yml`
     * `kubectl create namespace dev`
   * Switch default namespace to dev
@@ -777,22 +780,23 @@ spec:
   
 
   #### Create a Resource Quota
-    * ```yaml
-      apiVersion: v1
-      kind: ResurceQuota
-      metadata:
-        name: compute-quota
-        namespace: dev
-      
-      spec:
-        hard:
-          pods: "10"
-          requests.cpu: "4"
-          requests.memory: 5Gi
-          limits.cpu: "10"
-          limits.memory: 10Gi
-      ```
-    * `kubectl create -f compute-quota.yaml`
+  ```yaml
+  apiVersion: v1
+  kind: ResurceQuota
+  metadata:
+    name: compute-quota
+    namespace: dev
+  
+  spec:
+    hard:
+      pods: "10"
+      requests.cpu: "4"
+      requests.memory: 5Gi
+      limits.cpu: "10"
+      limits.memory: 10Gi
+  ```
+    
+  * `kubectl create -f compute-quota.yaml`
 
 ## Services
 
@@ -4305,8 +4309,29 @@ When you have alot of users with a lot of pods, the users would have to configur
 
 ## DNS 
 
-* Have two computers A and B 
+* Have two computers A and B. Both part of the same network and they have been assigned with the IP addresses `192.168.1.10` and `192.168.1.11`. 
+  * You are able to ping one computer from the other using the other computer's IP address.
+  * Know that system B has database services on them. So instead of having to remember the IP of system B, you decide to give it a name `db`
+  * Going forward you would like to `ping db` instead of it's ip address.
+    * if you tried that now, you would get error `ping: unknown host db`
+  * Basically want to tell system A that System B at ip address `192.168.1.11` has a name `db`
+    * can do this by adding an entry into the `/etc/hosts` file on system A
+    * `cat >> /etc/hosts` then enter `192.168.1.11    db`
+  * Now when you ping db, it will give a response.
+  * **NOTE** Host A does not check to see if system B's actual name is db, hostfile is the source of truth. 
+    * can even fool system A to believing that system B is Google just an entry into the host file with an IP mapping to www.google.com
+    * Then ping google and you will get a response from system B
+  * So we have two names pointing to the same system, on as db and one as google but can use either to reach system b
+  * Can have as many names as you want. 
+  ![networking-dns-hostname](/images/networking-dns-hostname.jpg) 
+  * Translating the IP to hostname this way is called **Name Resolution**
 
+  * This works until environments grew too much
+    * if one of these entries change, would need to modifiy entries in all of these hosts
+
+
+* How do we point our host to a DNS server? 
+  * Our DNS Server has the IP `192.168.1.100`
 
 
 
