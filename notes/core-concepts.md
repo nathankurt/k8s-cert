@@ -164,6 +164,12 @@
          1. [Default Gateway](#default-gateway)
       4. [Key Networking Commands](#key-networking-commands)
    2. [DNS](#dns-1)
+      1. [Private Domain Names](#private-domain-names)
+      2. [Record Types](#record-types)
+      3. [Other Tools to Communicate with Hosts](#other-tools-to-communicate-with-hosts)
+   3. [CoreDNS](#coredns)
+   4. [Network Namespaces](#network-namespaces)
+      1. [Connect Networks](#connect-networks)
 10. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -4332,10 +4338,253 @@ When you have alot of users with a lot of pods, the users would have to configur
 
 * How do we point our host to a DNS server? 
   * Our DNS Server has the IP `192.168.1.100`
+  * Every host has a DNS resolution config file at `/etc/resolv.conf`
+    * You add an entry into it specifying the address of the DNS server.
+    * `cat /etc/resolv.conf` -> `nameserver 192.168.1.100`
+    * Once this is configured on all of your host, every time host comes across a hostname that it doesn't know about, it looks it up from the DNS server.
+    * If IP of any of the hosts were to change, just update the DNS server.
+    * No longer need any of the entries from the etc host files. 
+      * But you still can have entries
+      * Say you were to provision a test server for your own needs
+        * don't think others would need it, so you can enter it in your hosts file
+    * If you have something in both, it looks at your `/etc/hosts` file first
+      * but order can be changed. 
+      * order defined by entry in file `etc/nsswitch.conf` line with host entry. 
+    ![dns-name-entry](/images/dns-name-entry.jpg)
+    * What if you try to ping a file that isn't in either? 
+      * will fail.  
+      * You can configure it to forward any unknown host names to public name server on the internet.
+        * You should not be able to ping extrenal sites such as facebook.com
+
+### Private Domain Names
+* Org could have multiple subdomains for each purpose
+  * `www` for external facing web sites
+  * `mail.mycompany.com` for accessing company's mail.
+  * `drive` for accessing storage
+  * `pay` for payroll
+  * `hr` for hr
+* All configured in orgs internal dns server.
+* since you've introduced more standard companies domain name, when you ping web, you can no longer get a response.
+  * fine for someone outside company to address it as `web.mycompany.com` but within company, you want to just use web server by first name `web`
+    * just like family name.
+  * Make an entry in your `etc/resolv.conf` file called `search` and specify domain name you want to append.
+  ![search-domains](/images/search-domains.jpg) 
+
+### Record Types
+* How are records stored in DNS server?
+  * `A`
+    * Stores IP to hostnames
+  * `AAAA`(Quad A)
+    * Storing IPV6 to host names 
+  * CNAME
+    * Mapping one name to another name
+  ![cname-record-types](/images/cname-record-types.jpg)
+
+### Other Tools to Communicate with Hosts
+
+**nslookup**
+* Can use nslookup to query a hostname from a dns server
+  * `nslookup www.google.com`
+  * doesn't consider entry in local `etc/hosts` file
+  * Entry for your web app has to be present in your dns server
+![nslookup](/images/nslookup.jpg)
+
+**dig**
+* returns more detail in a similar form as the one store on the server.
+![dig](/images/dig.jpg)
 
 
+## CoreDNS
+
+We are given a server dedicated as the DNS server, and a set of Ips to configure as entries in the server. There are many DNS server solutions out there, in this lecture we will focus on a particular one – CoreDNS.
+
+So how do you get core dns? CoreDNS binaries can be downloaded from their Github releases page or as a docker image. Let’s go the traditional route. Download the binary using curl or wget. And extract it. You get the coredns executable.
+
+* `wget https://github.com/coredns/coredns/releases/download/v1.4.0/coredns_1.4.0_linux_amd64.tgz`
+* `tar -xzvf coredns_1.4.0_linux_amd64.tgz`
+* `./coredns`
 
 
+Run the executable to start a DNS server. It by default listens on port 53, which is the default port for a DNS server.
+
+Now we haven’t specified the IP to hostname mappings. For that you need to provide some configurations. There are multiple ways to do that. We will look at one. First we put all of the entries into the DNS servers /etc/hosts file.
+
+And then we configure CoreDNS to use that file. CoreDNS loads it’s configuration from a file named Corefile. Here is a simple configuration that instructs CoreDNS to fetch the IP to hostname mappings from the file /etc/hosts. When the DNS server is run, it now picks the Ips and names from the /etc/hosts file on the server.
+
+![corefile](/images/corefile.jpg)
+
+CoreDNS also supports other ways of configuring DNS entries through plugins. We will look at the plugin that it uses for Kubernetes in a later section.
+
+More Info About CoreDNS here:
+
+* [https://github.com/kubernetes/dns/blob/master/docs/specification.md](https://github.com/kubernetes/dns/blob/master/docs/specification.md)
+
+* [https://coredns.io/plugins/kubernetes/](https://coredns.io/plugins/kubernetes/)
+
+
+## Network Namespaces
+
+* Network namespaces are used by containes like docker to implement network isolation
+  * **start with a simple host** 
+    * Containers are seperated from the underlying hosts using namespaces
+    * What are namespaces?
+      * If your host was a house then namespaces are rooms within the house that you assign to each of your children.
+      * room helps provide privacy to each child and can only see what's within the room, not outside it. As far as they are concerned, they are the only people living in the house
+      * However as parent you have visibility into all the rooms of the house as well as other areas of the house. 
+      * If you wish you can establish connectivity between two rooms in the house. 
+      ![network-namespace](/images/network-namespace-example.jpg) 
+
+  * When you create a container you want to make sure that it is isolated and that it does not see any other processes on the host or any other containers.
+    * We create a special room for it on our host using a namespace.
+    * As far as container is concerned, it only sees the processes run by it and thinks that it is on its own host. 
+  * Underlying host however has visibility into all of the processes including those running inside the containers. 
+    * Can be seen when you list the processes from within the container.
+      * `ps aux` shows one process with ID of `1`
+    * When you list the same processes as a root user from the underlying host, you see all the other processes along with the processes running inside the container.
+      * This time different processes ID.
+    ![process-namespace](/images/process-namespace.jpg) 
+
+  * When it comes to networking, host has its own interfaces that connect to the local area network.
+  * Host has its own routing and ARP table with information about the rest of the network. 
+    * We want to seal all of those details from the container.
+      * When the container is created, we create a network namespace for it so it has no visibility to any network related information on the host. 
+      * Within it's namespace, the container can have its own virtual interfaces routing and ARP tables.
+      * Container has its own interface
+    * To create a new network namespace On a Linux host run `ip netns add`
+      * create two network namespaces `ip netns add red` `ip netns add blue`
+    * to list the network namespaces run `ip netns`
+    * To list interfaces on host, run `ip link`
+      * see the host has the look back interface and the eth0 interface
+      * To run same command in network interface run `ip netns exec [interface name] ip link`
+      * Can also run `ip -n red link` command
+        * only works if you intend to run the ip command in the network interface.
+      * ![ip-exec-network-namespaces](/images/ip-exec-network-namespaces.jpg)
+      * Same for `arp` and `route`
+    * As of now, interfaces have no network connectivity.
+      * no interfaces of their own and they cannot see the underlying hosts network. 
+  
+  ### Connect Networks 
+
+* Lets establish connectivity between the namespaces themselves
+  * just like how we would connect to physical machines together using a cable to an ethernet interface, you can connect namespaces together using a virtual ethernet pair or a virtual cable
+    * often reffered to as a pipe.  
+  * To create run `ip link add [name1] type veth peer name [name2]`
+    * `ip link add veth-red type veth peer name veth-blue`
+  * Then attach each interface to appropriate namespace
+    * `ip link set [veth-name] netns [network-namespace-name]`
+    * `ip link set veth-red netns red`
+    * `ip link set veth-blue netns blue`
+  * Assign IP addresses to each of the namespaces
+    *  `ip -n [network-namespace-name] addr add [ip] dev [veth-name]`
+    *  `ip -n red addr add 192.168.15.1 dev veth-red`
+    *  `ip -n blue addr add 192.168.15.2 dev veth-blue`
+  * Bring up the interface
+    * `ip -n [network-namespace] set [veth-name] up`
+    * `ip -n red set veth-red up`
+    * `ip -n blue set veth-blue up`
+  * Should be up now and can ping from one to other with 
+    * `ip netns exec [network-namespace] ping [ip]`
+    * `ip netns exec red ping 192.168.15.2`
+  ![network-namespace-setup](/images/network-interface-setup.jpg) 
+
+  * If you look at ARP table in red namespace, you can see it's identified it's blue number at `192.168.1.2` with the MAC Address
+    * `ip netns exec red arp`
+    * Same with blue
+  * If you look at this from the host ARP Table, it has no idea about the interfaces we created
+  
+  * This works when you have two namespaces, what do you do when you have more them? How do you enable all of them to communicate with each other? 
+    * You create a virtual network inside your host. 
+    * To create a network, you need a switch. So to create a virtual network, you need a virtual switch.
+      * Create a virtual switch within our host and connect the namespace to it. 
+      * Multiple solutions available:
+        * Native solution `Linux Bridge`
+        * `Open vSwitch`
+        * etc.
+    * We'll use Linux Bridge option to create an internal bridge network. 
+      * To create internal bridge network, we add a new interface to the host
+        * `ip link add [v-net-name] type bridge`
+        * `ip link add v-net-0 type bridge`
+        * As far as host is concerned, it's just another interface
+          * Appears in the output of the ip link command along with other interfaces.
+      * Currently down so need to bring it up
+        * `ip link set dev [v-net-name] up`
+        * `ip link set dev v-net-0 up`
+    ![network-linux-bridge](/images/network-linux-bridge.jpg) 
+    * Now we will be connecting all namespaces to bridge network
+      * Need new cables for that purpose and current cable doesn't make sense anymore
+      * to remove link run `ip -n [network-namespace] link del [veth-name]`
+        * `ip -n red link del veth-red`
+          * automatically deletes blue since they are a pair
+      * Create new links 
+        * `ip link add veth-red type veth peer name veth-red-br`
+          * `veth-red-br` because it connects to the bridge network
+        * `ip link add veth-blue type veth peer name veth-blue-br`
+      * Get interfaces connected to red namespace
+        * `ip link set veth-red netns red`
+        * `ip link set veth-red-br master v-net-0`
+
+        * `ip link set veth-blue netns blue`
+        * `ip link set veth-blue-br master v-net-0`
+      * set ip addresses for these links and turn them on
+        * `ip -n red addr add 192.168.15.1 dev veth-red`
+        * `ip -n blue addr add 192.168.15.2 dev veth-blue`
+      * turn them on
+        * `ip -n red link set veth-red up`
+        * `ip -n blue link set veth-blue up`
+      ![network-linux-bridge](/images/linux-bridge-v-net.jpg) 
+
+      * Repeat for other two and now they can all communicate with each other since they have all ip addresses
+      * Can't reach interfaces from your host in these namespaces
+        * Host is on one network and the namespaces are on another. 
+        * If we really wanted to though, you could assign ip address to it since it's just another network interface. 
+          * `ip addr add 192.168.15.5/24 dev v-net-0`
+        ![linux-bridge-host-interface](/images/linux-bridge-host-interface.jpg)
+
+  * Remember, network is still private and restricted within the host from within the namespaces
+    * can't reach the outside world, nor can anyone from the outside world reach services or applications hosted inside
+    * only door to the outside world is the ethernet port on the host. 
+    * How do we configure this bridge to reach the LAN network through the ethernet port?
+      * Say there is another host attached to our LAN network with the address `192.168.1.3`
+      * What happens if I try to ping this host from my blue namespace? `ip netns exec blue ping 192.168.1.3`
+        * Blue namespace sees that i'm trying to reach a network at 192.168.1 which is different from my current network of `192.168.15`
+          * so it looks at its routing table to see how to find that network. 
+            * `ip netns exec blue route`
+            * The routing table has no information about other network so it comes back saying that the network is unreachable
+            * we need to add an entry into the routing table to provide a gateway or door to the outside world. 
+              * You can ping the namespaces
+              * localhost is the gateway that connects the two networks together. 
+              * `ip netns exec blue ip route add 192.168.1.0/24 via 192.168.15.5`
+                * Routes all traffic to the 192.168.1 network through the gateway at `192.168.15.5`
+            * remember our host has two IP addresses, one on the bridge network at `192.168.15.5` and another on the external network at `192.168.1.2`
+            * Can you use any in the route?
+              * **NO** because the blue namespace can only reach the gateway in its local network at `192.168.15.5`
+              * Default gateway should be reachable from your namespace when you add it to your route.
+                * When you try to ping now, no longer get network unreachable message but still don't get any response back.
+                * Our home network has our internal private IP addresses that the destination network doesn't know about so they cannot reach back.
+            * For this we need `NAT` enabled on our host acting as the gateway here so that it can send the messages to the LAN in its own name with its own address.
+              * Add a new rule in the NAT IP table in the POSTROUTING chain to masquerade or replace `from address` on all packets coming from the source network `192.168.15.0` with its own IP address
+                * `iptables -t nat -A POSTROUTING -s 192.168.15.0/24 -j MASQUERADE`
+              * This way anyone receiving these packets outside network will think that they are coming from the host and not from within the namespace. 
+              * When we try to ping now, we see that we are able to reach the outside world.
+      * Finally, Say LAN is connected to the internet
+        * We want namespaces to reach the internet
+        * So we try to ping a server on the internet at 8.8.8.8 from the blue namespace
+          * We recieve `Network Unreachable`. 
+          * Look at the routing table and see that we have routes to the network `192.168.1` but not to anything else
+            * `ip netns exec blue route`
+            * Since these namespaces can reach any network our hsot can reach, we can just say that to reach any external network, talk to our host.
+            * Add a default gateway specifying our host. 
+              * `ip netns exec blue ip route add default via 192.168.15.5`
+          * ![namespaces-to-internet](/images/namespaces-to-outside-world.jpg)
+        * What about connectivity from the outside world to inside the namespaces?
+          * Say for example, the blue namespace hosts a webapp on port 80
+            * As of now, namespaces are on an internal private network. Can only access them from host itself. 
+            * in order to make communication possible, two option
+              *  Give away identify of the private network to the second host. 
+              *  Basically add a route entry to the second host telling that host that the network `192.168.15` can be reached through the host at `192.168.1.2` 
+                 *  **BUT DON'T WANT TO DO THAT**
+              * Other option is to add a port forwarding rule using ip tables to say any traffic coming to `port 80` on the localhost is to be forwarded to port 80 on the IP assigned to the blue namespace
+                * `iptables -t nat -A PREROUTING --dport 80 --to-destination 192.168.15.2:80 -j DNAT`
 
 
 
@@ -4580,6 +4829,12 @@ When you have alot of users with a lot of pods, the users would have to configur
          1. [Default Gateway](#default-gateway)
       4. [Key Networking Commands](#key-networking-commands)
    2. [DNS](#dns-1)
+      1. [Private Domain Names](#private-domain-names)
+      2. [Record Types](#record-types)
+      3. [Other Tools to Communicate with Hosts](#other-tools-to-communicate-with-hosts)
+   3. [CoreDNS](#coredns)
+   4. [Network Namespaces](#network-namespaces)
+      1. [Connect Networks](#connect-networks)
 10. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
