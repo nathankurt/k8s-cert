@@ -113,9 +113,50 @@
    4. [Backup and Restore Methods](#backup-and-restore-methods)
       1. [Resource Configuration Backup](#resource-configuration-backup)
       2. [Backup - ETCD](#backup---etcd)
+7. [Security](#security)
+   1. [Kubernetes Security Primitives](#kubernetes-security-primitives)
+   2. [Authentication](#authentication)
+      1. [User Authentication](#user-authentication)
+         1. [Basic Auth Mechanisms](#basic-auth-mechanisms)
+   3. [TLS](#tls)
+      1. [TLS Basics](#tls-basics)
+         1. [Asymmetric Encryption](#asymmetric-encryption)
+         2. [Back to Certs](#back-to-certs)
+      2. [TLS In Kubernetes](#tls-in-kubernetes)
+         1. [Server Certificates for Servers](#server-certificates-for-servers)
+         2. [Server Certificates for Servers](#server-certificates-for-servers-1)
+         3. [Server Certificates for Servers](#server-certificates-for-servers-2)
+         4. [Client Certificates for Clients](#client-certificates-for-clients)
+      3. [TLS Certificate Creation](#tls-certificate-creation)
+         1. [Certificate Authority Cert Creation](#certificate-authority-cert-creation)
+         2. [Generating Client's Certificates](#generating-clients-certificates)
+         3. [What to Do](#what-to-do)
+         4. [Server Certificate Creation](#server-certificate-creation)
+   4. [View Certificate Details](#view-certificate-details)
+      1. [Health Check](#health-check)
+   5. [Certificates API](#certificates-api)
+   6. [KubeConfig](#kubeconfig)
+      1. [File Format](#file-format)
+      2. [Certificates in KubeConfig](#certificates-in-kubeconfig)
+   7. [API Groups](#api-groups)
+   8. [Role Based Access Controls](#role-based-access-controls)
+   9. [Cluster Roles and Role Bindings](#cluster-roles-and-role-bindings)
+   10. [Image Security](#image-security)
+   11. [Security Context](#security-context)
+   12. [Network Policy](#network-policy)
+      1. [Traffic Basics](#traffic-basics)
+      2. [Network Security in Kubernetes](#network-security-in-kubernetes)
+8. [Storage](#storage)
+   1. [Storage In Docker](#storage-in-docker)
+      1. [Docker Layered Architecture](#docker-layered-architecture)
+      2. [Volumes](#volumes)
+   2. [Container Storage Interface](#container-storage-interface)
+      1. [What CSI Looks Like](#what-csi-looks-like)
+   3. [Volumes](#volumes-1)
+   4. [Persistent Volumes](#persistent-volumes)
    5. [Persistent Volume Claims](#persistent-volume-claims)
    6. [Using Persistent Volume Claims in PODS](#using-persistent-volume-claims-in-pods)
-7. [Networking](#networking)
+9. [Networking](#networking)
    1. [Switching Routing](#switching-routing)
       1. [Switching](#switching)
       2. [Routing](#routing)
@@ -123,7 +164,7 @@
          1. [Default Gateway](#default-gateway)
       4. [Key Networking Commands](#key-networking-commands)
    2. [DNS](#dns-1)
-8. [Quick Notes](#quick-notes)
+10. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
       2. [Edit Deployments](#edit-deployments)
@@ -133,7 +174,7 @@
    5. [Inspect Authorization Types](#inspect-authorization-types)
    6. [Check to see which user is used to execute a process](#check-to-see-which-user-is-used-to-execute-a-process)
    7. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
-9. [End Table of Contents](#end-table-of-contents)
+11. [End Table of Contents](#end-table-of-contents)
 
 
 # Core Concepts
@@ -2215,46 +2256,46 @@ volumes:
 
 #### Configuring Secrets With Pod
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: simple-webapp-color
-spec:
-  containers:
-  - name: simple-webapp-color
-    image: simple-webapp-color
-    ports:
-      - containerPort: 8080
-    ### SET Secretp to Pod
-    envFrom: 
-      - secretRef:
-          name: app-secret
-          ## The name from the secret.yaml file
-    
-```
+  ```yaml
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    name: simple-webapp-color
+  spec:
+    containers:
+    - name: simple-webapp-color
+      image: simple-webapp-color
+      ports:
+        - containerPort: 8080
+      ### SET Secretp to Pod
+      envFrom: 
+        - secretRef:
+            name: app-secret
+            ## The name from the secret.yaml file
+      
+  ```
 
 * `kubectl create -f pod-definition.yaml` makes the data in the secret available as env variables
  
 * Can inject it as a single environment variable
 
-```yaml
-env:
-  - name: APP_COLOR
-    valueFrom:
-      secretKeyRef:
-        name: app-secret
-        key: DB_Password
-```
+  ```yaml
+  env:
+    - name: APP_COLOR
+      valueFrom:
+        secretKeyRef:
+          name: app-secret
+          key: DB_Password
+  ```
 
 * Can inject whole data as files in a volume.
 
-```yaml
-volumes:
-- name: app-secret-volume
-  secret:
-    secretName: app-secret
-```
+  ```yaml
+  volumes:
+  - name: app-secret-volume
+    secret:
+      secretName: app-secret
+  ```
   * Each attribute in the secret is created as a file with the value of the secret as its content
   ![secret-volumes](/images/secret-volumes.jpg)
   
@@ -2301,24 +2342,24 @@ Having said that, there are other better ways of handling sensitive data like pa
 
 ### Create Multi Container Pod
 `pod-definition.yaml`
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: simple-webapp
-  labels:
+  ```yaml
+  apiVersion: v1
+  kind: Pod
+  metadata:
     name: simple-webapp
-spec:
-  containers:
-    - name: simple-webapp
-      image: simple-webapp
-      ports:
-        - containerPort: 8080
-    ### Since value is an array, you can add another container here
-    - name: log-agent
-      image: log-agent
-    ###########
-```
+    labels:
+      name: simple-webapp
+  spec:
+    containers:
+      - name: simple-webapp
+        image: simple-webapp
+        ports:
+          - containerPort: 8080
+      ### Since value is an array, you can add another container here
+      - name: log-agent
+        image: log-agent
+      ###########
+  ```
 
 ### Multi Container PODs Design Patterns
 
@@ -2337,25 +2378,25 @@ spec:
 * An `initContainer` is configured in a pod like all other containers except that it is specified inside a `initContainers` section like this:
 
 `initContainer-definition.yaml`
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: myapp-pod
-  labels:
-    app: myapp
+  ```yaml
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    name: myapp-pod
+    labels:
+      app: myapp
 
-spec:
-  containers:
-  - name: myapp-container
-    image: busybox:1.28
-    command: ['sh', '-c', 'echo the app is running! && sleep 3600']
-    
-  initContainers:
-  - name: init-myservice
-    image: busybox
-    command: ['sh', '-c', 'git clone <some-repository-that-will-be-used-by-application> ; done;']
-```
+  spec:
+    containers:
+    - name: myapp-container
+      image: busybox:1.28
+      command: ['sh', '-c', 'echo the app is running! && sleep 3600']
+      
+    initContainers:
+    - name: init-myservice
+      image: busybox
+      command: ['sh', '-c', 'git clone <some-repository-that-will-be-used-by-application> ; done;']
+  ```
 * When a POD is first created, the initContainer is run, and the process in the initContainer must run to a completion before the real container hosting the app starts.
 * You can configure multiple like how we did for multi-pod containers. 
   * in that case, each initContainer is run one at a time in sequential order.
@@ -2562,14 +2603,14 @@ spec:
    * to restore cluster from backup
      * stop the kube-api server service with `service kube-apiserver stop` since restore process will require you to restart ETCD
      * then run `etcdctl restore` command.
-      ```bash
-      etcdctl \
-      snapshot restore snapshot.db
-      --data-dir /var/lib/etcd-from-backup \
-      --initial-cluster master-1=https://192.168.5.11:2380,master-2=https://192.168.5.12:2380 \
-      --initial-cluster-token etcd-cluster-1 \
-      --initial-advertise-peer-urls https://${INTERNAL_IP}:2380
-      ``` 
+        ```bash
+        etcdctl \
+        snapshot restore snapshot.db
+        --data-dir /var/lib/etcd-from-backup \
+        --initial-cluster master-1=https://192.168.5.11:2380,master-2=https://192.168.5.12:2380 \
+        --initial-cluster-token etcd-cluster-1 \
+        --initial-advertise-peer-urls https://${INTERNAL_IP}:2380
+        ``` 
   * Initializes a new cluster config and configures the members of ETCD as new members to a new cluster. 
       * prevents a new member from accidentally joining an existing cluster. 
       * say for example, you use this backup snapshot to provision a new etcd-cluster for testing purposes,
@@ -2585,11 +2626,11 @@ spec:
         * specify CA Certificate
         * specify the etcd-server certificate. 
   * If you are using a manged kubernetes cluster, backup by querying the kube-apiserver is probably the better way. 
-  ```etcdctl --endpoints=https://[127.0.0.1]:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key snapshot save /tmp/snapshot-pre-boot.db``` 
+    ```etcdctl --endpoints=https://[127.0.0.1]:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key snapshot save /tmp/snapshot-pre-boot.db``` 
 
-  ```ETCDCTL_API=3 etcdctl snapshot save /tmp/snapshot-pre-boot.db --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key```
+    ```ETCDCTL_API=3 etcdctl snapshot save /tmp/snapshot-pre-boot.db --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key```
 
-```ETCDCTL_API=3 etcdctl --endpoints=https://[127.0.0.1]:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt  --name=master  --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key --data-dir /var/lib/etcd-from-backup   --initial-cluster=master=https://127.0.0.1:2380  --initial-cluster-token etcd-cluster-1 --initial-advertise-peer-urls=https://127.0.0.1:2380      snapshot restore /tmp/snapshot-pre-boot.db```
+    ```ETCDCTL_API=3 etcdctl --endpoints=https://[127.0.0.1]:2379 --cacert=/etc/kubernetes/pki/etcd/ca.crt  --name=master  --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key --data-dir /var/lib/etcd-from-backup   --initial-cluster=master=https://127.0.0.1:2380  --initial-cluster-token etcd-cluster-1 --initial-advertise-peer-urls=https://127.0.0.1:2380      snapshot restore /tmp/snapshot-pre-boot.db```
 
 * then go into etcd and update `/etc/kubernetes/manifests/etcd.yaml`
 
@@ -2601,24 +2642,24 @@ Update new initial-cluster-token to specify new cluster
 
 Update volumes and volume mounts to point to new path
 
-```yaml
-    volumeMounts:
-    - mountPath: /var/lib/etcd-from-backup
+  ```yaml
+      volumeMounts:
+      - mountPath: /var/lib/etcd-from-backup
+        name: etcd-data
+      - mountPath: /etc/kubernetes/pki/etcd
+        name: etcd-certs
+    hostNetwork: true
+    priorityClassName: system-cluster-critical
+    volumes:
+    - hostPath:
+        path: /var/lib/etcd-from-backup
+        type: DirectoryOrCreate
       name: etcd-data
-    - mountPath: /etc/kubernetes/pki/etcd
+    - hostPath:
+        path: /etc/kubernetes/pki/etcd
+        type: DirectoryOrCreate
       name: etcd-certs
-  hostNetwork: true
-  priorityClassName: system-cluster-critical
-  volumes:
-  - hostPath:
-      path: /var/lib/etcd-from-backup
-      type: DirectoryOrCreate
-    name: etcd-data
-  - hostPath:
-      path: /etc/kubernetes/pki/etcd
-      type: DirectoryOrCreate
-    name: etcd-certs
-```
+  ```
 
 
 
@@ -2695,39 +2736,39 @@ Update volumes and volume mounts to point to new path
 
 
 #### Basic Auth Mechanisms
-  * can create a list of users and their passwords in a csv file and use that as the source for user information
-    * file has three columns
-      * password
-      * username
-      * userid
-    * then pass the file name as an option to the kube-api server `--basic-auth-file=user-details.csv`
-  * If you set up with `kubeadm` tool, then you must modify the kube-apiserver POD definition
+* can create a list of users and their passwords in a csv file and use that as the source for user information
+  * file has three columns
+    * password
+    * username
+    * userid
+  * then pass the file name as an option to the kube-api server `--basic-auth-file=user-details.csv`
+* If you set up with `kubeadm` tool, then you must modify the kube-apiserver POD definition
 `/etc/kubernetes/manifests/kube-apiserver.yaml`
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  creationTimestamp:
-  name: kube-apiserver
-  namespace: kube-system
-spec:
-  containers:
-  - command:
-    - kube-apiserver
-    - --authorization-mode=Node,RBAC
-    - --advertise-address=172.17.0.107
-    - --allow-privileged=true
-    - --enable-admission-plugins=NodeRestriction
-    - --enable-bootstrap-token-auth=true
-    ############add this new arg
-    - --basic-auth-file=user-details.csv
-    ###################
-    image: k8s.gcr.io/kube-apiserver-amd64:v1.11.3
+  ```yaml
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    creationTimestamp:
     name: kube-apiserver
-```
+    namespace: kube-system
+  spec:
+    containers:
+    - command:
+      - kube-apiserver
+      - --authorization-mode=Node,RBAC
+      - --advertise-address=172.17.0.107
+      - --allow-privileged=true
+      - --enable-admission-plugins=NodeRestriction
+      - --enable-bootstrap-token-auth=true
+      ############add this new arg
+      - --basic-auth-file=user-details.csv
+      ###################
+      image: k8s.gcr.io/kube-apiserver-amd64:v1.11.3
+      name: kube-apiserver
+  ```
 
-  * to authenticate using basic credentials while accessing the API server, specify the user and password using a curl command 
-  * This is not recommended since it is insecure. 
+* to authenticate using basic credentials while accessing the API server, specify the user and password using a curl command 
+* This is not recommended since it is insecure. 
 
 ## TLS
 
@@ -4463,9 +4504,50 @@ When you have alot of users with a lot of pods, the users would have to configur
    4. [Backup and Restore Methods](#backup-and-restore-methods)
       1. [Resource Configuration Backup](#resource-configuration-backup)
       2. [Backup - ETCD](#backup---etcd)
+7. [Security](#security)
+   1. [Kubernetes Security Primitives](#kubernetes-security-primitives)
+   2. [Authentication](#authentication)
+      1. [User Authentication](#user-authentication)
+         1. [Basic Auth Mechanisms](#basic-auth-mechanisms)
+   3. [TLS](#tls)
+      1. [TLS Basics](#tls-basics)
+         1. [Asymmetric Encryption](#asymmetric-encryption)
+         2. [Back to Certs](#back-to-certs)
+      2. [TLS In Kubernetes](#tls-in-kubernetes)
+         1. [Server Certificates for Servers](#server-certificates-for-servers)
+         2. [Server Certificates for Servers](#server-certificates-for-servers-1)
+         3. [Server Certificates for Servers](#server-certificates-for-servers-2)
+         4. [Client Certificates for Clients](#client-certificates-for-clients)
+      3. [TLS Certificate Creation](#tls-certificate-creation)
+         1. [Certificate Authority Cert Creation](#certificate-authority-cert-creation)
+         2. [Generating Client's Certificates](#generating-clients-certificates)
+         3. [What to Do](#what-to-do)
+         4. [Server Certificate Creation](#server-certificate-creation)
+   4. [View Certificate Details](#view-certificate-details)
+      1. [Health Check](#health-check)
+   5. [Certificates API](#certificates-api)
+   6. [KubeConfig](#kubeconfig)
+      1. [File Format](#file-format)
+      2. [Certificates in KubeConfig](#certificates-in-kubeconfig)
+   7. [API Groups](#api-groups)
+   8. [Role Based Access Controls](#role-based-access-controls)
+   9. [Cluster Roles and Role Bindings](#cluster-roles-and-role-bindings)
+   10. [Image Security](#image-security)
+   11. [Security Context](#security-context)
+   12. [Network Policy](#network-policy)
+      1. [Traffic Basics](#traffic-basics)
+      2. [Network Security in Kubernetes](#network-security-in-kubernetes)
+8. [Storage](#storage)
+   1. [Storage In Docker](#storage-in-docker)
+      1. [Docker Layered Architecture](#docker-layered-architecture)
+      2. [Volumes](#volumes)
+   2. [Container Storage Interface](#container-storage-interface)
+      1. [What CSI Looks Like](#what-csi-looks-like)
+   3. [Volumes](#volumes-1)
+   4. [Persistent Volumes](#persistent-volumes)
    5. [Persistent Volume Claims](#persistent-volume-claims)
    6. [Using Persistent Volume Claims in PODS](#using-persistent-volume-claims-in-pods)
-7. [Networking](#networking)
+9. [Networking](#networking)
    1. [Switching Routing](#switching-routing)
       1. [Switching](#switching)
       2. [Routing](#routing)
@@ -4473,7 +4555,7 @@ When you have alot of users with a lot of pods, the users would have to configur
          1. [Default Gateway](#default-gateway)
       4. [Key Networking Commands](#key-networking-commands)
    2. [DNS](#dns-1)
-8. [Quick Notes](#quick-notes)
+10. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
       2. [Edit Deployments](#edit-deployments)
@@ -4483,4 +4565,4 @@ When you have alot of users with a lot of pods, the users would have to configur
    5. [Inspect Authorization Types](#inspect-authorization-types)
    6. [Check to see which user is used to execute a process](#check-to-see-which-user-is-used-to-execute-a-process)
    7. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
-9. [End Table of Contents](#end-table-of-contents)
+11. [End Table of Contents](#end-table-of-contents)
