@@ -121,6 +121,8 @@
       2. [Routing](#routing)
       3. [Gateway](#gateway)
          1. [Default Gateway](#default-gateway)
+      4. [Key Networking Commands](#key-networking-commands)
+   2. [DNS](#dns-1)
 8. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -134,32 +136,32 @@
 9. [End Table of Contents](#end-table-of-contents)
 
 
-Core Concepts
-=============
+# Core Concepts
+
 
 ## Cluster Architecture
 
 
 * Two kinds of ships
-    * Cargo Ships that does the actual work of carrying containers across the sea
-    * Control ships that are responsible for monitoring the cargo ships
+  * Cargo Ships that does the actual work of carrying containers across the sea
+  * Control ships that are responsible for monitoring the cargo ships
 
 * Worker Nodes - 
     * Host application as containers
 
 * Master Node - Control Ship
-    * Manage, Plan, Schedule, Monitor Nodes
-    * Since there is so much info coming all the time, need to maintain info about different "ships", which container is on which "ship" and what time it was loaded, etc.
-    * Stored in a highly available key value store known as *Etcd*
+  * Manage, Plan, Schedule, Monitor Nodes
+  * Since there is so much info coming all the time, need to maintain info about different "ships", which container is on which "ship" and what time it was loaded, etc.
+  * Stored in a highly available key value store known as *Etcd*
     * *Etcd*: A database that stores information in a key-value format
     * *Scheduler*: When ships arrive, you load containers on them using cranes, the cranes identify the containers that need to be placed on ships. 
       * It identifies the right ship based on its size, its capacity, the number of containers already on the ship. and any other conditions such as the destination of the ship
       * *kube-scheduler*
 
 * Different offices in the dock that are assigned to special tasks or departments
-    * i.e. Operations team takes care ship handling, traffic control, etc. deal with issues related to damages, the routes take
-    * Cargo team takes care of containers. When containers are damaged or destroyed, they make sure new containers are made available
-    * Services office that takes care of the I.T and communications between different ships. 
+  * i.e. Operations team takes care ship handling, traffic control, etc. deal with issues related to damages, the routes take
+  * Cargo team takes care of containers. When containers are damaged or destroyed, they make sure new containers are made available
+  * Services office that takes care of the I.T and communications between different ships. 
 
 * **Controller Manager**: In Kubernetes we have controllers available that take care of different areas. 
   * **Node-Controller** - takes care of nodes
@@ -4205,7 +4207,80 @@ When you have alot of users with a lot of pods, the users would have to configur
   * you can simply say for any network that you don't know a route to, use this router as the default gateway
     * `ip route add default via 192.168.2.1`
   * So in a simple setup like this, all you need is a single entry in your routing table with the default gateway set to the roluters IP address.
-    * instad of the word `default`, you can also say `0.0.0.0` which means any IP address.  
+    * instad of the word `default`, you can also say `0.0.0.0` which means any IP address. 
+
+
+* Say you have multiple routers in your network, one for the internet and another for the internal private network. Then you'll need to have two separate entries for each network. 
+  * One entry for the internal private network
+  * Another entry with the default gateway for all other networks including public networks
+* If you're having issues reaching the internet from your systems, the routing table and default gateway config is agood place to start.
+
+
+**lets now look at how we can set up a linux host as a router**
+  *  Have 3 Hosts, A, B, and C
+  *  A & B are connected to a network 192.168.1 and B & C are connected to another on 192.168.2
+     * So host B is connected to both the networks using two interfaces: `eth0` and `eth1`
+  * How do we get A to talk to C?
+    * If i try to ping 192.168.2.5 from A, it would say `Network is Unreachable` and by now we know why that is. 
+    * Host A has no idea how to reach a network at 192.168.2
+      * Need to tell Host A that the door or gateway to network 2 is through host B.
+      * Do that by adding a routing table entry. `ip route add 192.168.2.0/24 via 192.168.1.6`
+      * add a route to access network 192.168.2 via the gateway 192.168.1.6
+    * If the packert were to get through to host C, C will have to send back responses to host A.
+    * When host C tries to reach Host A at 192.168.1 network, it would face the same issue. So we need to let Host C know that it can reach Host A through Host B which is acting as a router. 
+      * So we add a similar entry `ip route add 192.168.1.0/24 via 192.168.2.6`
+    ![networking-interal-routing](/images/networking-interal-router.jpg)
+      * When we try to ping now, we no longer get network unreachable error - means our routing entries are right.
+      * Still don't get any response back.
+        * By default packets in linux are not forwared from one interface to the next
+        * ie. packets recevied on eth0 on host B are not forwared to elsewhere through eth1 because security.
+          * If you had etho0 connected to your private network and eth1 to a public network, we don't want anyone from the public network to easily send messages to the pirvate network unless you explicity allow that. 
+        * In this case since we konw that botrh are private networks and its safe to enable communication between them, we can allow host B to forward packets from one network to the other. 
+          * The interfaces is governed by a setting in this system at file `/proc/sys/net/ipv4/ip_forward`
+            * By default the value in this file is set to `0`, yo ucan change this to `1` and you should see pings go through. 
+              * `echo 1 > /proc/sys/net/ipv4/ip_forward`
+            * This change doesn't persist across reboots. For that you must modify the same value in the `/etc/sysctl.conf` file
+              * `net.ipv4.ip_forward = 1`
+
+
+### Key Networking Commands
+
+  * `ip link`
+    * list and modify interfaces on the host
+  * `ip addr`
+    * see the ip addresses assigned to those interfaces
+  * `ip addr add`
+    * set ip addresses on the interfaces
+    * `ip addr add 192.168.1.10/24 dev eth0`
+    * To Make changes persist must set them in the `/etc/network/interfaces`
+  * `route` 
+    * used to view the routing table
+  * `ip route add`
+    * used to add entries to the routing table
+    * `ip route add 192.168.1.0/24 via 192.168.2.1`
+  * `cat /proc/sys/net/ipv4/ip_forward`
+    * check if ip forwarding is enabled on the host
+
+
+## DNS 
+
+* Have two computers A and B 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Quick Notes
 
@@ -4396,6 +4471,8 @@ When you have alot of users with a lot of pods, the users would have to configur
       2. [Routing](#routing)
       3. [Gateway](#gateway)
          1. [Default Gateway](#default-gateway)
+      4. [Key Networking Commands](#key-networking-commands)
+   2. [DNS](#dns-1)
 8. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
