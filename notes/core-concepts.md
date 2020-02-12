@@ -174,6 +174,7 @@
    5. [Docker Networking](#docker-networking)
       1. [Docker Bridge Networks](#docker-bridge-networks)
    6. [Container Networking Interface (CNI)](#container-networking-interface-cni)
+   7. [CLuster Networking](#cluster-networking)
 10. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -184,7 +185,8 @@
    5. [Inspect Authorization Types](#inspect-authorization-types)
    6. [Check to see which user is used to execute a process](#check-to-see-which-user-is-used-to-execute-a-process)
    7. [Network Namespaces Checks](#network-namespaces-checks)
-   8. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
+   8. [Handy Networking Commands](#handy-networking-commands)
+   9. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
 11. [End Table of Contents](#end-table-of-contents)
 
 
@@ -4759,9 +4761,58 @@ More Info About CoreDNS here:
         * `IPVLAN`
         * `MACVLAN`
         * `WINDOWS`
+      * Also has IPAM plugins
+        * `DHCP`
+        * `host-local`
+      * Other third party plguins available as well
+        * `weave`
+        * `flannel`
+        * `cilium`
+        * `VMware NSX`
+        * `Calico Infoblox`
+        * etc.
+      * All of these container runtimes implement CNI standards except for Docker because docker has it's own set of standards known as Container Network Model(CNM) which is another standard that aims at solving container networking challenges similar to CNI
+      * Due to differences, plugins don't natively integrate with docker. 
+        * Meaning you can't run a docker container and specify the network plugin to use.
+        * You can still use Docker with CNI, you just have to work around it yourself. 
+          * For example, create a docker container without any network config, then manually invoke the bridge plugin yourself
+            * `docker run --network=none nginx`
+            * `bridge add [cont-id] /var/run/netns/2e34dcf34`
+
+
+## CLuster Networking
+
+* kubernetes cluster consists of master and worker nodes
+  * each node must have at least 1 interface connected to a network
+  * each interface must have an address configured.
+  * hosts must have a uniqure hostname set. + unique MAC address
+    * Note especially if you create the VMs by cloning existing ones
+  ![kubernetes-network-requirements](/images/kubernetes-network-requirements.jpg) 
+    * Some ports that need to be opened as well. 
+      * `master` should accept connections on `6443` for the API server
+        * Worker nodes, kubectl tool, external users, and all other control plan components access the kube-api server via this port
+      * `kubelets` on `master` and `worker` nodes listen on `10250`
+      * `kube-scheduler` requires port `10251`
+      * `kube-controller-manger` needs port `10252`
+      * `Services` on `worker` nodes opens `30000 - 32767`
+      * `ETCD` needs port `2379` open and `2380` also if multiple master nodes.
+      * If you have multipel master nodes, ports need to be open on those as well. 
+
+     | Protocol | Direction |      Node       | Purpose                 |    Port     | Used By              |
+     | :------- | :-------- | :-------------: | ----------------------- | :---------: | :------------------- |
+     | TCP      | Inbound   |     master      | kube-api                |    6443     | All                  |
+     | TCP      | Inbound   | master + worker | kubeletes               |    10250    | Self, Control Plane  |
+     | TCP      | Inbound   |     master      | kube-scheduler          |    10251    | Self                 |
+     | TCP      | Inbound   |     master      | kube-controller-manager |    10252    | Self                 |
+     | TCP      | Inbound   |     worker      | Node Port Services      | 30000-32767 | All                  |
+     | TCP      | Inbound   |     master      | ETCD                    | 2379, 2380  | kube-apiserver, etcd |
+
+      
+      Can also find this on kubernetes documentation page [https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#check-required-ports](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#check-required-ports)
 
 
 
+    
 
 
 
@@ -4836,7 +4887,16 @@ More Info About CoreDNS here:
 * While testing the Network Namespaces, if you come across issue where you can't ping one namespace from the other, make sure you set the NETMASK while setting IP Address. ie: 192.168.1.10/24
 
 
-
+## Handy Networking Commands
+* `ip linkn`
+* `ip addr`
+* `ip addr add 192.168.1.10/24 dev eth0`
+* `ip route`
+* `ip route add 192.168.1.0/24 via 192.168.2.1`
+* `cat /proc/sys/net/ipv4/ip_forward`
+* `arp`
+* `netstat -plnt`
+* `route`
 
 ## Labs to make sure I know better
   * Cluster Mainencance: `Practice Test - Cluster Upgrades`
@@ -5019,6 +5079,7 @@ More Info About CoreDNS here:
    5. [Docker Networking](#docker-networking)
       1. [Docker Bridge Networks](#docker-bridge-networks)
    6. [Container Networking Interface (CNI)](#container-networking-interface-cni)
+   7. [CLuster Networking](#cluster-networking)
 10. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -5029,5 +5090,6 @@ More Info About CoreDNS here:
    5. [Inspect Authorization Types](#inspect-authorization-types)
    6. [Check to see which user is used to execute a process](#check-to-see-which-user-is-used-to-execute-a-process)
    7. [Network Namespaces Checks](#network-namespaces-checks)
-   8. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
+   8. [Handy Networking Commands](#handy-networking-commands)
+   9. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
 11. [End Table of Contents](#end-table-of-contents)
