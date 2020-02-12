@@ -176,6 +176,8 @@
    6. [Container Networking Interface (CNI)](#container-networking-interface-cni)
    7. [CLuster Networking](#cluster-networking)
    8. [Pod Networking](#pod-networking)
+   9. [CNI in Kubernetes](#cni-in-kubernetes)
+   10. [CNI Weave](#cni-weave)
 10. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -4817,8 +4819,168 @@ More Info About CoreDNS here:
     
 
 ## Pod Networking
-  * we talked about the network that connects the nodes together, but there is another layer of networking
-    * pod layer
+* we talked about the network that connects the nodes together, but there is another layer of networking
+  * pod layer, because kubernetes cluster is going to have a large number of services and pods running on it.
+
+* How do you access the services running on these PODs internally from within cluster, as well as externally from outside the cluster?
+  * problems that kubernetes expects you to solve. - no built in solution for this
+  * However they have laid out the requirements for POD networking
+
+**Requirements**
+* Every POD should have an IP address
+* Every POD should be able to communicate with every other POD in the same node.
+* Every Pod should be able to communicate with every other POD on other nodes without NAT.
+
+**Implement It**
+* Have a 3 node cluster
+  * They all run pods either for management or workload purposes
+* Nodes are part of an external network and has an IP addresses in the `192.168.1` series
+* Node1 is assigned `11`, node2 is assigned `12`, node3 is assigned `13`
+* When containers are created, kubernetes creates network namespaces for them. 
+  * attach these namespaces to a network
+  * Crate a bridge network on each node and then bring them up.
+    * `ip link add v-net-0 type bridge`
+      * Do this on each node
+    * `ip link set dev v-net-0 up`
+      * on each node
+      * ![kub-bridge-network](/images/kubernetes-bridge-network.jpg)
+    * Time to assign an IP address to the bridge interfaces
+      * Decide that each bridge network will be on it's own subnet 
+      * Choose any private IP address range like `10.244.1`, `10.244.2`, `10.244.3`
+      * Set IP address for the bridge interface
+        * `ip addr add 10.244.1.1/24 dev v-net-0` On each Node
+        * `ip addr add 10.244.2.1/24 dev v-net-0`
+        * `ip addr add 10.244.3.1/24 dev v-net-0`
+    * Built our base, remaining steps are to be performed for each container and every time a new container is created
+      * so we write a script for it. - file that has all commands that we will be using
+        * can run this multiple times for each container going forward.
+      
+
+      ```sh
+      # create veth pair
+      ip link add ....
+
+      # attach veth pair
+      ip link set ....
+      ip link set ....
+
+      # Assign IP addresses
+      ip -n <namespace> addr add .....
+      #add route to default gateway
+      ip -n <namespace> route add .....
+
+      # Bring up interface
+      ip -n <namespace> link set .....
+      ```
+
+    * Copy script to other nodes and run the script on them to assign IP addresses and connect those containers to their own interanl networks 
+    * Solved the first part of the challenge, The pods all get their own unique IP address and are able to communicate with each other on their own nodes
+    * Next part is to enable them to reach other PODs on other nodes.
+      * Say for example, the pod at `10.244.1.2` on `Node1` wants to ping pod `10.244.2.2` on `Node2`
+        * Right now, the first has no idea where the address of `10.244.2.2` is because its on a different network than it's own 
+        * Add a route to node1's routing table to route traffic to 10.244.2.2 via seconds nodes IP at `192.168.1.12`
+          * `node1$ ip route add 10.244.2.2 via 192.168.1.12`
+          * `node1$ ip route add 10.244.3.2 via 192.168.1.13`
+          * `node2$ ip route add 10.244.1.2 via 192.168.1.11`
+          * `node2$ ip route add 10.244.3.2 via 192.168.1.13`
+          * `node3$ ip route add 10.244.1.2 via 192.168.1.11`
+          * `node3$ ip route add 10.244.2.2 via 192.168.1.12`
+        * This is kind of a bad way to do it 
+          * better way is to do that on a router.
+          * If you have one in your network and point all host to use that as the default gateway, you can easily manage routes to all networks in the routing table on your router.
+            * Individual addresses we created with the address 10.244.1.0/24 on each node now form a single large network with the address `10.244.0.0/16`
+            ![kub-router-style](/images/kubernetes-router-style.jpg) 
+    * Tie it all together, run the script when a pod is created automatically with CNI
+      * CNI tells kubernetes "this is how you should call a script" as soon as you create a container. And CNI tells us "this is how your script should look"
+      * Modify script a bit to meet CNI standards
+        `net-script.sh` 
+        ```sh
+        ADD)
+         # create veth pair
+         # attach veth pair
+         # assign IP addresses
+         # bring up interface
+         ip -n <namespace> link set ...
+
+        DEL)
+        
+          # delete veth pari
+          ip link del ....
+        
+        ``` 
+
+      * Now that script is ready, kubelet on each node is responsible for creating containers.
+        * Whenever a container is created, the kubelet looks at the CNI configuration that was passed as a command line arg when it was run (`--cni-conf-dir=/etc/cni/net.d`) and identifies our scripts name.
+          * Then looks in the (`--cni-bin-dir=/etc/cni/bin`) to find our script (`./net-script.sh add <container> <namespace>`) 
+          * Then script takes care of the rest. 
+           
+
+## CNI in Kubernetes
+
+* See how Kubernetes is configured to use CNI plugins. 
+  * Kubernetes is responsible for creating container network namespaces
+    * identifying and attaching those namespaces to the right network by calling the right network plugin
+  * The CNI plugin must be invoked by the component within kubernetes that is responsible for creating containers. 
+    * Because that component must then invoke the appropriate network plugin after the container is created.
+  * Configured by the kubelet server with 
+    * `--network-plugin=cni`
+    * `--cni-bin-dir=/opt/cni/bin`
+    * `--cni-conf-dir=/etc/cni/net.d`
+  ![kubelet-cni](/images/kubelet-cni.jpg)
+
+  * View kubelet options
+    * `ps -aux | grep kubelet`
+    * Can see the network plugins set to CNI and a few other options related to CNI such as `cni-bin` dir and `cni-conf-dir` directory. 
+    * `cni-bin-dir` has all supported CNI plugins as executables 
+      * ie. bridge, dhcp, flannel etc.
+    * `cni-conf-dir` has a set of config files. 
+      * Where the kubelet looks to find out which plugin needs to be used.
+      * In this case, it finds the bridge config file. 
+      * if multiple files, it will choose the one in alphabetical order. 
+    ![kubelet-cni-options](/images/kubelet-cni-options.jpg) 
+
+    * `cat /etc/cni/net.d/10-bridge.conf` to see the bridge config file
+      * ![kubelet-conf-bridge-options](/images/kubelet-bridge-conf.jpg)
+      * Format defined by the CNI standard for plugin config file.
+        * Name is `mynet`, type is `bridge`
+        * Has set of other configurations which can be related to the binding, routing, and masqurading in NAT.
+          * The `isGateway` defines whether the bridge network interface should get an IP address assigned so it can act as a gateway
+          * `ipMasq` defines if a NAT rule should be added for IP masquerading
+          * `ipam` section defines IPAM configuration.
+            * where you specify subnet or the range of IP addresses that will be assigned to pods and any necessary routes.
+            * The `"type": "host-local"` indicates that the IP addresses are managed locally on this host. 
+              * Unlike a dhcp server maintaining it remotely, the `type` can also be set to `DHCP` to configure an external DHCP server.
+
+## CNI Weave
+
+* See how WeaveWorks weave CNI plugin works
+
+* Networking solution
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5085,6 +5247,8 @@ More Info About CoreDNS here:
    6. [Container Networking Interface (CNI)](#container-networking-interface-cni)
    7. [CLuster Networking](#cluster-networking)
    8. [Pod Networking](#pod-networking)
+   9. [CNI in Kubernetes](#cni-in-kubernetes)
+   10. [CNI Weave](#cni-weave)
 10. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
