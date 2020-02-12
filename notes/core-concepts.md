@@ -170,6 +170,10 @@
    3. [CoreDNS](#coredns)
    4. [Network Namespaces](#network-namespaces)
       1. [Connect Networks](#connect-networks)
+      2. [Network Commands Summary](#network-commands-summary)
+   5. [Docker Networking](#docker-networking)
+      1. [Docker Bridge Networks](#docker-bridge-networks)
+   6. [Container Networking Interface (CNI)](#container-networking-interface-cni)
 10. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -179,7 +183,8 @@
    4. [Check Number of Applications](#check-number-of-applications)
    5. [Inspect Authorization Types](#inspect-authorization-types)
    6. [Check to see which user is used to execute a process](#check-to-see-which-user-is-used-to-execute-a-process)
-   7. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
+   7. [Network Namespaces Checks](#network-namespaces-checks)
+   8. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
 11. [End Table of Contents](#end-table-of-contents)
 
 
@@ -2340,7 +2345,7 @@ Having said that, there are other better ways of handling sensitive data like pa
 
 ## Multi Container PODs
    
-   *  At times you may need two services to work together(ie web server and a logging service)
+   *  At times you may need two services to work together(i.e. web server and a logging service)
       *  You need one agent instance per web server instance paired together.
       *  Don't want to merge the code of the two together since each of them target different functionalities and still want them to be developed and deployed separately. 
    *  Need one agent per web server instance paired together that can scale up and down together.
@@ -2382,7 +2387,7 @@ Having said that, there are other better ways of handling sensitive data like pa
 
 ## InitContainers
 
-* In a multi-container pod, each container is expected to run a process that stays llive as long as the POD's lifecycle. But at times you may want to run a process that runs to completion in a container. 
+* In a multi-container pod, each container is expected to run a process that stays alive as long as the POD's lifecycle. But at times you may want to run a process that runs to completion in a container. 
   * i.e. A process that pulls a code or binary from a repo that will be used by the main web app. That is a task that will be run only one time when the pod is first created. Or a process that waits for an external service or db to be up before the actual application starts. 
 
 * An `initContainer` is configured in a pod like all other containers except that it is specified inside a `initContainers` section like this:
@@ -2536,9 +2541,9 @@ spec:
     * While the master node is being upgraded, control plane components such as apiserver, scheduler, and controller managers go down briefly. 
       * master going down doesn't mean your worker nodes and applications on the cluster are impacted. all workloads hosted on the worker nodes continue to server users as normal. 
       * since master is down, all management functions are down. can't access the cluster using kubectl or other kubernetes api. 
-        * cannot deploly new apps or delete/modify existing ones. 
+        * cannot deploy new apps or delete/modify existing ones. 
         * controller manager won't function either. if a pod was to fail, new pod won't be automatically created. 
-  * once upgraded, cluster shoulbe be back to function normally
+  * once upgraded, cluster should be be back to function normally
   * now time to upgrade worker nodes. 
     * could upgrade all at once, but then your pod is down and users aren't able to access applications. Once the upgrade is complete, the nodes are back up, new pods are scheduled and users can resume access. 
       * Not a great way to go.
@@ -4586,6 +4591,175 @@ More Info About CoreDNS here:
               * Other option is to add a port forwarding rule using ip tables to say any traffic coming to `port 80` on the localhost is to be forwarded to port 80 on the IP assigned to the blue namespace
                 * `iptables -t nat -A PREROUTING --dport 80 --to-destination 192.168.15.2:80 -j DNAT`
 
+### Network Commands Summary
+
+**Create network namespaces**
+`ip netns add red`
+`ip netns add blue`
+
+**Create veth pairs**
+`ip link add veth-red type veth peer name veth blue`
+
+**Created Add veth to respective namespaces**
+`ip link set veth-red netns red`
+`ip link set veth-blue netns blue`
+
+**Set IP Addresses**
+`ip -n red addr add 192.168.1.1 dev veth-red`
+`ip -n blue addr add 192.168.1.2 dev veth-blue`
+
+**Check IP Addresses**
+`ip -n red addr`
+`ip -n blue addr`
+
+**Bring up Interfaces**
+`ip -n red link set veth-red up`
+`ip -n blue link set veth-blue up`
+
+**Bring Loopback devices up**
+`ip -n red link set lo up`
+`ip -n blue link set lo up`
+
+**Add default gateway**
+`ip netns exec red ip route add default via 192.168.1.1 dev veth-red`
+`ip netns exec blue ip route add default via 192.168.1.1 dev veth-blue`
+
+
+
+
+## Docker Networking
+
+* Start with a single docker host - a server with docker installed on it
+  * Has an ethernet interface at `eth0` that connects to the local network with the IP `192.168.1.10`
+  * When you run a container you have a different networking options to choose from
+    * **None Network**
+      * container isn't attached to any network
+      * `docker run --network none nginx`
+      * If you run multiple containers, they are all created without being part of any network and cannot talk to each other or to the outside world. 
+      * ![docker-none-network](/images/docker-none-network.jpg)
+    * **Host Network**
+      * `docker run --network host nginx`
+      * The container is attached to the host's network
+      * No network isolation between the host and the container
+      * If you deploy a web app listening on port 80 in the container, then the web application is available on port 80 on the host without having to do any additional port mapping
+        * If you try to run another instance of the same container that listens on the same port, it won't work since they share hosts networking and two processes cannot listen on the same port at the same time. 
+      * ![docker-host-network](/images/docker-host-networking.jpg)
+    * **Bridge**
+      * An internal private network is created which the docker host and containers attach to. 
+      * `docker run nginx`
+      * the network has an address `172.17.0.0` by default
+        * each device connecting to this network gets their own internal private network address on this network.
+      * ![docker-bridge-network](/images/docker-bridge-network.jpg)
+     
+### Docker Bridge Networks
+
+* When docker is installed on the host, by default it creates an internal private network called `bridge` by default. 
+  * can see this when you run `docker network ls`
+* docker calls the network `bridge`, but the host calls the network `docker0`
+  * can see this when you run `ip link`
+
+* Note that the interface is currently down.
+* Bridge network is not like an interface to the host, but a switch to the namespaces or containers within the host
+  * So the interface docker0 on the host is assigned an IP `172.17.0.1` 
+  * can see with output of `ip addr` command
+* Whenever a container is created, Docker creates a network namespace for it just like how we created network namespaces [before](#network-namespaces)
+* run `ip netns` command to list the namespace
+  * minor hack to get the `ip netns` command to list the namespaces created by docker. 
+* you can see the namespace associated with each container in the output of the `docker inspect [container-id]` command
+  * ![docker-bridge-namespace](/images/docker-bridge-namespace.jpg)
+
+* How does docker attach the container or its network namespace to the bridge network? 
+  * for rest of section `Container` = `Network Namespace`
+  * like before, it creates a virtual cable with two interfaces on each end. 
+    * if you run `ip link` command on the docker host, you see one end of the interface which is attached to the local bridge `docker0`
+    * If you run same command but with -n option with namespace, then it lists the other lnd of the interface within the container namespace
+      * `ip -n [ip netns result] link`
+      * ![docker-bridge-link](/images/docker-bridge-link.jpg)
+    * Interface also get an ip assigned an IP within the network. 
+      * Can view by running the `ip -n [container-namespace] addr` comand. 
+      * Can also view by attaching to the container and look at the IP address assigned to it that wya
+* Same procdure is followed every time a new container is created
+  * Docker creates a namespace
+  * Creates a pair of interfaces
+  * Attaches one end to the container and another to the bridge network
+* interface pairs can be identified using their numbers
+  * Odd and even form a pair
+    * `if9` and `if10` are one pair
+    * ![docker-bridge-communicate](/images/docker-bridge-communicate.jpg)
+
+**Port Mapping**
+* Created a container called nginx - web app serving a web page on port 80
+  * since our container is in the same network, only the host itself can access this web page.
+  * If you tried to access the web page using curl within the IP of the container from within Docker host on port 80, you'll see the web page. 
+  * But can't outside
+  
+* To allow external users to access the applications hosted on containers, docker provides a port publishing/port mapping option
+  * When you run containers, tell docker to map port 8080 on the docker host to port 80 on the container
+    * `docker run -p 8080:80 nginx`
+    * Then you can access the web app using the IP of the docker host and port 8080
+    * Any traffic to port 8080 on the docker host will be forwared to port 80 on the container
+
+* How does docker forward traffic from one port to another?
+  * 
+  * Do it normally andCreate a NAT rule for that using `iptables`
+    ```sh
+    iptables \
+          -t nat \
+          -A PREROUTING \
+          -j DNAT \
+          --dport 8080 \
+          --to-destination 80
+    ```
+    * Create an entry into the NAT table, to append a rule to the PREROUTING chain to change the destination port from 8080 to 80. 
+  * Docker does it pretty much the same way
+    ```sh
+    iptables \
+          -t nat \
+          -A DOCKER \
+          -j DNAT \
+          --dport 8080 \
+          --to-destination 172.17.0.3:80
+    ```
+    * Docker adds the rule to the docker chain and sets the destination to include the containers IP as well
+  * You can see the rule docker creates when you list the rule in iptables
+    * `iptables -nvL -t nat` ([explain-shell](https://explainshell.com/explain?cmd=iptables+-nvL+-t+nat))
+
+## Container Networking Interface (CNI)
+* A lot of of container solutions solve the networking challenges in kind of the same way, like rocket or Mesos Containerizer or any other solutions that work with containers and requires networking configuration between them like kubernetes
+![coniner-networking-solutions](/images/container-network-solutions.jpg)
+
+* Take all the ideas from the different solutions and move all the networking portions of it into a single program or code
+  * since it's for the bridge network, we'll call it `Bridge`
+  * So we created a program or script that performs all the required tasks to get the container attached to a bridge network, 
+    * you could run this program using it's name `bridge` and speicy you want to add this container to a particular network namespace
+    * bridge program takes care of the rest so that container runtime environments are relieved of those tasks 
+  * Hard to konw container run times will invoke program correctly, will be made correctly, what arguments and commands it should support. 
+    * NEED SOME STANDARDS DEFINED
+  * Where Container Network Interface(CNI) comes in.
+  ![cni-whatis](/images/cni-whatis.jpg) 
+    * Set of standards that define how programs should be developed to solve networking challenges in a container runtime environment
+    * The programs are referred to as plugins(the bridge program is a plugin for CNI)
+    * defines how the plugin should be developed and how container run times should invoke them. 
+    * defines a set of responsibilities for container runtimes and plugins
+      * for **container runtimes**, specifies that it is responsible for:
+        * Container runtime must create network namespace
+        * IDentify network container must attach to
+        * Container runtime to invoke Network Plguin (bridge) when container is ADDed
+        * Container Runtime to invoke Network Plugin (bridge) when container is DELeted
+        * JSON format of the network configuration
+      * For **plugins** defines that:
+        * Must support command line args `ADD`/`DEL`/`CHECK`
+        * Must support parameters container id, network ns, etc.
+        * Must manage IP address assignemnt to PODs
+        * Must return results in a specific format
+      * Any runtime should be able to work with any plugin
+      * CNI Comes with set of supported plugins already
+        * `Bridge`
+        * `VLAN`
+        * `IPVLAN`
+        * `MACVLAN`
+        * `WINDOWS`
+
 
 
 
@@ -4656,7 +4830,13 @@ More Info About CoreDNS here:
 
 * `kubectl exec ubuntu-sleeper whoami`
   * will give you the user that is executing the command on the pod named ubuntu sleeper
-  * 
+
+## Network Namespaces Checks
+
+* While testing the Network Namespaces, if you come across issue where you can't ping one namespace from the other, make sure you set the NETMASK while setting IP Address. ie: 192.168.1.10/24
+
+
+
 
 ## Labs to make sure I know better
   * Cluster Mainencance: `Practice Test - Cluster Upgrades`
@@ -4835,6 +5015,10 @@ More Info About CoreDNS here:
    3. [CoreDNS](#coredns)
    4. [Network Namespaces](#network-namespaces)
       1. [Connect Networks](#connect-networks)
+      2. [Network Commands Summary](#network-commands-summary)
+   5. [Docker Networking](#docker-networking)
+      1. [Docker Bridge Networks](#docker-bridge-networks)
+   6. [Container Networking Interface (CNI)](#container-networking-interface-cni)
 10. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -4844,5 +5028,6 @@ More Info About CoreDNS here:
    4. [Check Number of Applications](#check-number-of-applications)
    5. [Inspect Authorization Types](#inspect-authorization-types)
    6. [Check to see which user is used to execute a process](#check-to-see-which-user-is-used-to-execute-a-process)
-   7. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
+   7. [Network Namespaces Checks](#network-namespaces-checks)
+   8. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
 11. [End Table of Contents](#end-table-of-contents)
