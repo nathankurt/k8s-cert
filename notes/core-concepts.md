@@ -175,6 +175,7 @@
       1. [Docker Bridge Networks](#docker-bridge-networks)
    6. [Container Networking Interface (CNI)](#container-networking-interface-cni)
    7. [CLuster Networking](#cluster-networking)
+   8. [Pod Networking](#pod-networking)
 10. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -186,7 +187,8 @@
    6. [Check to see which user is used to execute a process](#check-to-see-which-user-is-used-to-execute-a-process)
    7. [Network Namespaces Checks](#network-namespaces-checks)
    8. [Handy Networking Commands](#handy-networking-commands)
-   9. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
+   9. [Get the IP of a Pod / nod](#get-the-ip-of-a-pod--nod)
+   10. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
 11. [End Table of Contents](#end-table-of-contents)
 
 
@@ -4814,7 +4816,7 @@ More Info About CoreDNS here:
 
     
 
-
+## Pod Networking
 
 
 
@@ -4888,7 +4890,7 @@ More Info About CoreDNS here:
 
 
 ## Handy Networking Commands
-* `ip linkn`
+* `ip link`
 * `ip addr`
 * `ip addr add 192.168.1.10/24 dev eth0`
 * `ip route`
@@ -4897,6 +4899,9 @@ More Info About CoreDNS here:
 * `arp`
 * `netstat -plnt`
 * `route`
+
+## Get the IP of a Pod / nod
+  `kubectl get nodes -o wide | grep [node-name] | grep -Eo '([0-9]*\.){3}[0-9]*'` 
 
 ## Labs to make sure I know better
   * Cluster Mainencance: `Practice Test - Cluster Upgrades`
@@ -5080,6 +5085,7 @@ More Info About CoreDNS here:
       1. [Docker Bridge Networks](#docker-bridge-networks)
    6. [Container Networking Interface (CNI)](#container-networking-interface-cni)
    7. [CLuster Networking](#cluster-networking)
+   8. [Pod Networking](#pod-networking)
 10. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -5091,5 +5097,6 @@ More Info About CoreDNS here:
    6. [Check to see which user is used to execute a process](#check-to-see-which-user-is-used-to-execute-a-process)
    7. [Network Namespaces Checks](#network-namespaces-checks)
    8. [Handy Networking Commands](#handy-networking-commands)
-   9. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
+   9. [Get the IP of a Pod / nod](#get-the-ip-of-a-pod--nod)
+   10. [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
 11. [End Table of Contents](#end-table-of-contents)
