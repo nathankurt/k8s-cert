@@ -4817,10 +4817,8 @@ More Info About CoreDNS here:
     
 
 ## Pod Networking
-
-
-
-
+  * we talked about the network that connects the nodes together, but there is another layer of networking
+    * pod layer
 
 
 
@@ -4891,6 +4889,7 @@ More Info About CoreDNS here:
 
 ## Handy Networking Commands
 * `ip link`
+  * 
 * `ip addr`
 * `ip addr add 192.168.1.10/24 dev eth0`
 * `ip route`
