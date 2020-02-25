@@ -178,6 +178,10 @@
    8. [Pod Networking](#pod-networking)
    9. [CNI in Kubernetes](#cni-in-kubernetes)
    10. [CNI Weave](#cni-weave)
+   11. [IP Address Management - Weave](#ip-address-management---weave)
+      1. [How Weave Does It](#how-weave-does-it)
+   12. [Service Networking](#service-networking)
+   13. [DNS In Kubernetes](#dns-in-kubernetes)
 10. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -4955,23 +4959,185 @@ More Info About CoreDNS here:
 
 * See how WeaveWorks weave CNI plugin works
 
-* Networking solution
+* Networking solution manually had a routing table which mapped what networks are on what hosts. 
+  * So when a packet is sent from one pod to another, it goes out to the network, to the router and finds its way to the node and hosts that pod. 
+  * That works for a small environment and in a simple network. But in a larger environment with 100s of nodes in a cluster and 100s of PODs on each node, that's not practical. 
+    * Routing table may not support so many entries and that is where you need to get creative and look for other solutions.
 
 
+* Think of kubernetes cluster as our company, and the nodes as different offices
+  * With each site, we have different departments and within each department, we have different offices. 
+  ![office-setup-example](/images/office-example-overview.jpg)
+  * Someone in `office-1` wants to send a packet to `office-3` and hands it over to the office boy. 
+    * All he knows is it needs to go to office 3 and he doesn't care who or how it is transported. 
+    * Office boy takes the package, gets in his car, looks up the address of the target office in GPS, uses directions on the street and finds his way to the destination site. 
+    * Delivers the package to payroll dept who in turn forwards the package to office 3. 
+      * This works just find for now. 
+  * Soon expan regions and countries and this process doesn't really work anymore. 
+    * hard for office boy to keep track of so many routes
+  * Decide to outsource all mailing and shipping companies who do it best. 
+    * First thing they do is place their agents in each of the companies sites.
+    * Know all about each others sites, the departments in them, and the offices in them.
+    * So when a package is sent from office 10 to office 3
+      * shipping agent in that site intercepts the package and looks at office name, knows exactly in which site and department that office is in through his internal network with his peers on the other sites.
+      * Then places this package into his own new package with the destination address set to the target site's location
+      * ![office-big-example](/images/office-big-example.jpg)
+      * Once package arrives at destination, it's intercepted by the agent on that site. He opens the package, retrieves the original package and deliver it to the right dept. 
 
 
+**Back to Weave World**
+* Weave CNI plugin deployed on a cluster, 
+  * it deploys an agent or service on each node. 
+    * They communicate with each other to exchange information regarding the nodes and networks and PODs within them.
+  *  Each agent or peer stores a topology of the entire setup.
+     * That way they know the pods and their IPs on the other nodes.
+* Weave creates its own bridge on the nodes and names it weave. 
+  * Then assigns an IP address to each network
+
+* A single pod may be attached to multiple bridge networks 
+  * `kubectl exec busybox ip route`
+  * Can have a pod attached to the weave bridge as well as the docker bridge created by docker
+* path it takes depends on the route configured on the container
+* Weave makse sure that PODs get the correct route configured to reach the agent. 
+  * Agent then takes care of other PODs
+* now when a packet is sent from one pod to another on another node, weave intercepts the packet and identifies that it's on a seperate network
+  * then encapsulates this packet into a new one with new source and destination and sends it across the network.
+  * Once on the other side, the other weave agent retrieves the packet, decapsulates and routes the packet to the right pod
+
+**How to Deploy**
+
+* Weave and weave peers can be deployed as services or daemons on each node in the cluster manually
+  * or if kubernetes is setup already, deploy it as pods in the cluster.
+* Once the base kubernetes system is ready with nodes and networking configured between the nodes + basic control plane components are deployed,
+  * weave can be deployed in the cluster with a single `kubectl apply` command
+    * `kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"`
+    * ![deploy-weave-daemonset](/images/deploy-weave-daemonset.jpg)
+  * After deployed, you can see the weave peers with `kubectl get pods -n kube-system`
+  * Troubleshoot with `kubectl logs weave-net-[pod-ending] weave -n kube-system`
+  ![weave-peers](/images/weave-peers.jpg) 
 
 
+## IP Address Management - Weave
+
+* How does IP address management work? 
+
+* How are the virtual bridge networks in the nodes assigned an IP subnet?
+  * Where is this information stored and who is responsible for ensureing there is no duplicate IP assigned. 
+
+* Start with **The Who** 
+  * Let's ask CNI as they're the ones who define the standards
+  * CNI says it's the responsibility of the CNI plugin - the network solutions provider
+    * Take care of assigning IP to the containers
+  
+    * CNI comes with two built in plugins that you can outsource this task to.
+    * In this case, the plugin that implements the approach that we followed for managing the IP address locally on each host is the host local plugin but is still our responsiblity to invoke that plugin in our script. 
+    * Or we can make our script dynamic to support different kinds of plugins. 
+      * CNI configuration file has a section called `ipam` in which we can specify the type of plugin to be used:
+        `cat /etc/cni/net.d/net-script.conf`
+        ```json
+        {
+          "ipam": {
+            "type": "host-local",
+            "subnet": "10.244.0.0/16",
+            "routes": [
+              { "dst": "0.0.0.0/0" }
+            ]
+          }
+        }
+
+        ``` 
+    *  Also specify the subnet and route to be used.
+       *  Details can be read from our script to invoke the appropriate plugin instead of hard coding it to use host-local every time
+       *  Different host-local providers do it differently every time. 
+### How Weave Does It 
+
+  * Weave by default allocates the IP Range `10.32.0.0/12` for the entire network
+    * Gives the network IP from range `10.32.0.1 - 10.47.255..254`
+    * From this range, the peers decide to split the IP addresses equally between them and assigns one portion to each node. 
+    * ![weave-ip-range](/images/weave-ip-range.jpg)
+    * Ranges are configurable with additional options past while deploying the weave plugin to a cluster.
+
+## Service Networking
+
+* Rarely configure pods to communicate directly with each other.
+  * If you want a pod to access services host on another pod, you would always use a service.
+
+* Different kinds of services:
+* **Cluster IP** 
+  * To make the oragne pod accessible to the blue pod, create an `orange-service`
+    * `orange-service` gets an IP address and a name assigned to it
+    * Blue pod can now access the orange pod through the `orange-service` IP or its name
+  * What about access from other PODs on other nodes? 
+    * When a sercvice is created, it is accessbiel from all parts of the cluster irrespective of what nodes the pods are on. 
+      * While a pod is hosted on a node, a service is hosted across the cluster.
+        * Not bound to a specific node, but service is only accessible from within the cluster
+  
+  * If orange pod was hosting a db app that is only to be accessed from within the cluster, then this type of service works just fine. 
+  * ![Cluster-IP](/images/Cluster-IP-Service.jpg)
+
+* **NodePort**
+  * Say for instance the purple pod was hosting a web app
+    * To make the app on the pod accessible outside the cluster, we create another service of type `NodePort`
+    * Service also gets an IP address assigned to it and works just like ClusterIP 
+      * As in all the other PODs can access this service using it's IP
+      * But in addition it also exposes the application on a port on all nodes in the cluster. 
+        * That way external users or applications have access to the service. 
+
+* Focus is more on services and less on Nodes
+
+* Have a three node cluster - no pods or services yet
+* Know every kubernetes node runs a kubelet process, which is responsible for creating PODs. 
+  * Each kubelet service on each node watches the changes in the cluster through the kube-api server,
+  * Every time a new pod is to be created, it creates the POD on the nodes
+  * Then invokes the CNI plugin to configure networking for that pod. 
+  * Each node runs another component `kube-proxy` 
+    * Watches for changes through kube-apiserver and every time a new service is to be created kube proxy gets into action
+  * Unlike PODs, services are not created on each node or assigned to each node
+    * Cluster Wide
+    * There is no server or service really listening on the IP of the service. 
+    * No processes or namespaces for a service
+      * just a virtual object
+
+* How does it get assigned an IP then? 
+  * When we create service object in kube, assigned an IP address from a pre-defined range
+    * kube-proxy components running on each node, gets taht IP address and creates forwarding rules on each node in the cluster
+    * Saying any traffic coming to this IP, the IP of the service should go to the IP of the pod. 
+    * ![services-ip-forwarding](/images/services-ip-forwarding.jpg)
+  * How are rules created? 
+    * `userspace`
+      * kube-proxy listens on a port for each service and proxies connections to the pods
+    * `ipvs` 
+      * creates ipvs rules
+    * `iptables` 
+      * Default option
+  * Proxy mode can be set while configuring kube-proxy service
+    * `kube-proxy --proxy-mode [userspace | iptables | ipvs ] ...`
+
+* see how kube-tables are configured by kube-proxy and how you can view them on the nodes
+  * Have a pod named db deployed on node-1
+  * Ip address 10.244.1.2
+    * Create a service of type `ClusterIP` to make this pod available within the cluster. 
+      * When the service is created Kubernetes assigns an IP address to it. Range is set 
+        * `kube-api-server --servicer-cluster-ip-range ipNet`
+        * `ps aux | grep kube-api-server`
+          * `range=10.96.0.0/12`
+
+* **NOTE** Whatever range is specified for POD Network CIDR Range, should not overlap with this. 
+
+* can see the rules created by kube-proxy in iptables nat output
+  * `iptables -L -t net | grep db-service` to show all rules created by kube-proxy
+  * All rules created by kube-proxy have a comment with the name of the service on it. 
+  * Rules mean any traffic going to IP address 10.103.132.104 on port 3306 should have it's destination address changed to 10.244.1.2 and port 3306 (IP Of the POD)
+  * Done by adding a DNAT rule to IP tables
+  * ![iptables](/images/iptables-explain.jpg)
+
+* Similarly, when you create services of type `NodePort`, kube-proxy creates iptable rules to forward all traffic coming on a port on all nodes to the respective backend PODs. 
+  * Kube-proxy creates these entries in the kube-proxy logs itself. In the logs, you will find what proxier it uses. In this case its IP tables 
+      
+     
 
 
-
-
-
-
-
-
-
-
+## DNS In Kubernetes
 
 
 
@@ -5068,6 +5234,8 @@ More Info About CoreDNS here:
   * Cluster Mainencance: `Practice Test - Cluster Upgrades`
   * Backup and Restore Methods: `Practice Test - Backup and Restore Methods`
   * Security: `Practice Test - View Certificates`
+  * Networking: `Test service networking` 
+    * `Networking Weave` 
 
 
 
@@ -5249,6 +5417,10 @@ More Info About CoreDNS here:
    8. [Pod Networking](#pod-networking)
    9. [CNI in Kubernetes](#cni-in-kubernetes)
    10. [CNI Weave](#cni-weave)
+   11. [IP Address Management - Weave](#ip-address-management---weave)
+      1. [How Weave Does It](#how-weave-does-it)
+   12. [Service Networking](#service-networking)
+   13. [DNS In Kubernetes](#dns-in-kubernetes)
 10. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
