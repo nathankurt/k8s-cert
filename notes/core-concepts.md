@@ -182,6 +182,9 @@
       1. [How Weave Does It](#how-weave-does-it)
    12. [Service Networking](#service-networking)
    13. [DNS In Kubernetes](#dns-in-kubernetes)
+   14. [CoreDNS in Kubernetes](#coredns-in-kubernetes)
+   15. [Ingress](#ingress)
+      1. [Services vs Ingress](#services-vs-ingress)
 10. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
@@ -5133,14 +5136,138 @@ More Info About CoreDNS here:
 
 * Similarly, when you create services of type `NodePort`, kube-proxy creates iptable rules to forward all traffic coming on a port on all nodes to the respective backend PODs. 
   * Kube-proxy creates these entries in the kube-proxy logs itself. In the logs, you will find what proxier it uses. In this case its IP tables 
-      
+    
      
 
 
 ## DNS In Kubernetes
 
+* Have a three node kubernetes cluster with some pods and services deployed on them. 
+  * Each node has a nodename and IP address assigned to it
+* Kubernetes deploys a built-in DNS server by default when you setup a cluster
+  * if you set up manually then you do it by yourself. 
+
+* Focus purely on PODs and services within the cluster - As long as cluster networking is set up correctly, and all pods and services can get their own IP address and can reach each other, we should be good
+
+* Start with just two pods and a service. 
+  * We assume that all pods and services can reach each otehr using their IP addresses.
+  * Being hosted on two different nodes doesn't matter
+    * As far as DNS is concerned, we assume that all pods and services can reach each other using their IP addresses.
+    * To make web server accessible to the test pod, we create a service.
+    * Name it `Web Service`
+      * Service gets an IP `10.107.37.188` and whenever a service is created the kubernetes DNS service creates a record for the service. 
+        * Maps the service name to the IP address
+          * Within the cluster any pod can now reach the service using its service name
+            * `curl http://web-service`
+        * In this case since all the pods were in the same namespace, you were able to reach the web service using just the service name, `web-service`
+          * If you want to reach the web service in a different namespace named `apps`
+            * You would have to say `curl http://web-service.apps`
+            ![dns-namespace-example](/images/dns-namespace-example.png) 
+            * Web-service is name of the server
+            * Apps is the name of the namespace
+          * For each namespace the DNS server creates a subdomain.
+            * All the services are grouped together into another subdomain called `SVC`
+              * So you can reach your application with the name `web-service.apps.svc`
+                  * `http://web-service.apps.svc`
+            * Finally, all the services and PODS are grouped together into a root domain for the cluster, whichi is set to `cluster.local` by default. 
+              * Can access the service using the URL: `web-service.apps.svc.cluster.local` and that's the fully qualified domain name for the service.
+                * `curl http://web-service.apps.svc.cluster.local`
+            ![cluster.local.svc](/images/cluster-local-svc.jpg) 
+
+      * What about Records for PODS? 
+        * By default, records are not created for PODS.
+          * Can enable that explicity
+        * Once enabled, records are created by pods as well
+          * Does not use the POD name though.
+            * For each pod, Kubernetes generates a name by repalcing the dots `.` in the IP address with dashes `-`
+              * `10.244.2.5 -> 10-244-2-5`
+            * Namespaces remains the same and the type is set to pod. 
+            * Root domain is always `cluster.local`
+              * `curl http://10-244-2-5.apps.pod.cluster.local`
+            ![cluster.local.pod](/images/cluster-local-pod.jpg)
+        * Similarly, test pod in the default namespace gets a record in the DNS server, with its IP converted to a dashed hostname `10.244.1.5`, namespace set to default, type is pod and root is cluster.local. 
+        * Resolves to the IP Address in the pod
+
+## CoreDNS in Kubernetes
+  * CoreDNS server is deployed as a POD in the kube-system namespace in the kubernetes cluster. 
+    * Deployed as two pods for redundancy as part of a replicaset
+      * Actually a replicaset within a deployment.
+
+  * Just think of it as a Pod 
+  * CoreDNS requires a configuartion file. 
+    * `cat /etc/coredns/Corefile`
+        ```json
+
+          .:53 {
+              errors
+              health
+              kubernetes cluster.local in addr.arpa ip6.arpa {
+                pods insecure
+                upstream
+                fallthrough in-addr.arpa ip6.arpa
+              }
+              prometheus :9153
+              proxy . /etc/resolv.conf
+              cache 30
+              reload
+          }
+        ```
+      * Set to use the name server from the kubernetes node. 
+      * Core file is passed in to the pod as a configmap
+        * `kubectl get configmap -n kube-system`
+           ```
+            Name            Data      Age
+            coredns         1         168d
+           ```
+      
+      * Next step is for the Pod to point to the coreDNS server. 
+        * What address do PODs use to reach the DNS server? 
+          * When CoreDNS solution is deployed, it also creates a service to make it available to other componentes within a cluster.
+          * Service is named `kube-dns` by default. 
+            * `kubectl get service -n kube-system` 
+          * IP address of services is configured as the `nameserver` on pods
+            * `cat /etc/resolv.conf`
+            * Don't have to create this yourself, DNS configs on PODs are done by kubernetes automatically when the PODs are created.
+            * Kubelet is responsible for that. 
+              * If you look at config file of the kubelet, you will see the IP of the DNS server and domain in it. 
+                ![coredns-files](/images/coredns-files.jpg)
+              * Once the pods are configured with the right nameservers, you can now resolve other pods and services
+                * You can access the web-service using just 
+                  * `web-service`
+                  * `web-service.default`
+                  * `web-service.default.svc`
+                  * Or `web-service.default.svc.cluster.local`
+                * If you try to manually lookup the web-service using `nslookup` or the `host` command, it will return the fully qualified domain name. 
+                  * This is because the `resolv.conf` file also has a search entry which is set to `default.svc.cluster.local` as well as `svc.cluster.local` and `cluster.local`
+                  * However, it only has entries for service, you won't be able to access the pod the same way. 
+                    * for that you need to specify the Fully Qualified Domain Name(FQDN)
 
 
+## Ingress
+
+### Services vs Ingress
+  
+  * Start with scenario: 
+    * You are deploying an application on kubernetes for a company that has a nonline store selling products. 
+    * App would be available at `www.my-online-store.com`
+    * Build the application into a Docker Image and deploy it on the kubernetes cluster as a POD in a Deployment. 
+    * Your application needs a database so you deploy a MySQL DB as a POD 
+    * Create a service of type ClusterIP called `mysql-service` to make it accessible to your application. 
+
+  * App is now working. Still need to make the application accessible to the outside world
+    * Create another service, type `NodePort` and make your applicaiton available on a high-port on the nodes in the cluster. 
+
+    * In Image below, port 38080 is allocated for the service. 
+    * Users can now acess your application using the URL `http://<node-ip>:38080` 
+  * Whenever traffic increases, we increase the number of replicas of the pod to handle the additional traffic 
+   
+  ![service-app-example](/images/service-app-example.jpg)
+
+  * However, if you've deployed a production grade app before, you know that there are many more things involved in addition simply splitting the traffic between pods.
+  * 
+
+           
+   
 
 
 
@@ -5421,6 +5548,9 @@ More Info About CoreDNS here:
       1. [How Weave Does It](#how-weave-does-it)
    12. [Service Networking](#service-networking)
    13. [DNS In Kubernetes](#dns-in-kubernetes)
+   14. [CoreDNS in Kubernetes](#coredns-in-kubernetes)
+   15. [Ingress](#ingress)
+      1. [Services vs Ingress](#services-vs-ingress)
 10. [Quick Notes](#quick-notes)
    1. [Editing Pods and Deployments](#editing-pods-and-deployments)
       1. [Edit a POD](#edit-a-pod)
