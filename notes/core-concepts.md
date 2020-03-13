@@ -1,7 +1,9 @@
 
 
 # Table of Contents
+<<<<<<< HEAD
 - [Table of Contents](#table-of-contents)
+- [- End Table of Contents](#ul-liend-table-of-contentsli-ul)
 - [Core Concepts](#core-concepts)
   - [Cluster Architecture](#cluster-architecture)
   - [ETCD](#etcd)
@@ -182,6 +184,9 @@
     - [How Weave Does It](#how-weave-does-it)
   - [Service Networking](#service-networking)
   - [DNS In Kubernetes](#dns-in-kubernetes)
+  - [CoreDNS in Kubernetes](#coredns-in-kubernetes)
+  - [Ingress](#ingress)
+    - [Services vs Ingress](#services-vs-ingress)
 - [Quick Notes](#quick-notes)
   - [Editing Pods and Deployments](#editing-pods-and-deployments)
     - [Edit a POD](#edit-a-pod)
@@ -196,6 +201,209 @@
   - [Get the IP of a Pod / nod](#get-the-ip-of-a-pod--nod)
   - [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
 - [End Table of Contents](#end-table-of-contents)
+- [- End Table of Contents](#ul-liend-table-of-contentsli-ul-1)
+=======
+- [Table of Contents](#table-of-contents)
+- [- End Table of Contents](#ul-liend-table-of-contentsli-ul)
+- [Core Concepts](#core-concepts)
+  - [Cluster Architecture](#cluster-architecture)
+  - [ETCD](#etcd)
+    - [ETCD For Beginners](#etcd-for-beginners)
+    - [ETCD in Kubernetes](#etcd-in-kubernetes)
+  - [Kube-API Server](#kube-api-server)
+  - [Kube Controller Manager](#kube-controller-manager)
+  - [Kube Scheduler](#kube-scheduler)
+  - [Kubelet](#kubelet)
+  - [Kube Proxy](#kube-proxy)
+  - [PODs](#pods)
+    - [Recap](#recap)
+    - [How to deploy Pods](#how-to-deploy-pods)
+    - [PODs with YAML](#pods-with-yaml)
+  - [ReplicaSets](#replicasets)
+    - [Creating a Replication Controller](#creating-a-replication-controller)
+    - [Creating a ReplicaSet](#creating-a-replicaset)
+    - [Labels and Selectors](#labels-and-selectors)
+  - [Deployments](#deployments)
+    - [What is a Deployment](#what-is-a-deployment)
+    - [Definition](#definition)
+  - [Helpful Pod Commands](#helpful-pod-commands)
+  - [Namespaces](#namespaces)
+    - [Basics](#basics)
+    - [Resource Limits](#resource-limits)
+    - [DNS](#dns)
+    - [Commands](#commands)
+      - [Create Namespace Like](#create-namespace-like)
+      - [Create a Resource Quota](#create-a-resource-quota)
+  - [Services](#services)
+    - [Services Use Case](#services-use-case)
+    - [Service Types - Basics](#service-types---basics)
+    - [NodePort](#nodeport)
+    - [Cluster IP](#cluster-ip)
+      - [Creation](#creation)
+  - [Imperative Commands](#imperative-commands)
+    - [POD](#pod)
+    - [Deployment](#deployment)
+    - [Service](#service)
+    - [Misc.](#misc)
+- [Scheduling](#scheduling)
+  - [Manual Scheduling](#manual-scheduling)
+    - [Labels and Selectors](#labels-and-selectors-1)
+    - [Creating Labels](#creating-labels)
+    - [Selectors](#selectors)
+    - [Annotations](#annotations)
+  - [Taints and Tolerations](#taints-and-tolerations)
+    - [Commands](#commands-1)
+    - [Master Nodes](#master-nodes)
+  - [Node Selectors](#node-selectors)
+    - [Limitations](#limitations)
+  - [Node Affinity](#node-affinity)
+    - [Node Affinity Types](#node-affinity-types)
+  - [Node Affinity Vs Taints and Tolerations](#node-affinity-vs-taints-and-tolerations)
+  - [Resource Requirements and Limits](#resource-requirements-and-limits)
+    - [Resource Limits](#resource-limits-1)
+  - [Daemon Sets](#daemon-sets)
+    - [Use Case](#use-case)
+    - [Creation](#creation-1)
+    - [How it works](#how-it-works)
+  - [Static Pods](#static-pods)
+    - [Why Use These?](#why-use-these)
+    - [Static PODs vs DaemonSets](#static-pods-vs-daemonsets)
+    - [Delete Static Pods on other nodes](#delete-static-pods-on-other-nodes)
+  - [Multiple Schedulers](#multiple-schedulers)
+    - [Deploy Additional Scheduler](#deploy-additional-scheduler)
+      - [Deploy Additional Scheduler - Kubeadm](#deploy-additional-scheduler---kubeadm)
+      - [View Schedulers](#view-schedulers)
+      - [Use Custom Scheduler](#use-custom-scheduler)
+    - [View Scheduler Logs and Events](#view-scheduler-logs-and-events)
+  - [Configuring Kubernetes Scheduler](#configuring-kubernetes-scheduler)
+- [Logging and Monitoring](#logging-and-monitoring)
+  - [Monitor Cluster Components](#monitor-cluster-components)
+    - [Heapster vs Metrics Server](#heapster-vs-metrics-server)
+    - [Metrics Server -- Getting Started](#metrics-server----getting-started)
+  - [Managing Application Logs](#managing-application-logs)
+    - [Logs - Docker](#logs---docker)
+    - [Logs - Kubernetes](#logs---kubernetes)
+- [Application Lifecycle Management](#application-lifecycle-management)
+  - [Rolling Updates and Rollbacks](#rolling-updates-and-rollbacks)
+    - [Deployment Strategies](#deployment-strategies)
+    - [Kubectl apply](#kubectl-apply)
+    - [Upgrades](#upgrades)
+    - [Rollback](#rollback)
+    - [Kubectl run](#kubectl-run)
+    - [Summarize-Commands](#summarize-commands)
+  - [Configure Applications](#configure-applications)
+  - [Application Commands - Docker](#application-commands---docker)
+  - [Application Commands & Arguments](#application-commands--arguments)
+  - [Configure Environment Variables in Applications](#configure-environment-variables-in-applications)
+    - [Config Maps](#config-maps)
+      - [Create the ConfigMaps](#create-the-configmaps)
+      - [Inject them into the pod.](#inject-them-into-the-pod)
+    - [Secrets](#secrets)
+      - [Creating a Secret](#creating-a-secret)
+      - [Configuring Secrets With Pod](#configuring-secrets-with-pod)
+      - [Secrets Notes](#secrets-notes)
+  - [Multi Container PODs](#multi-container-pods)
+    - [Create Multi Container Pod](#create-multi-container-pod)
+    - [Multi Container PODs Design Patterns](#multi-container-pods-design-patterns)
+  - [InitContainers](#initcontainers)
+- [Cluster Maintenance](#cluster-maintenance)
+  - [OS Upgrades](#os-upgrades)
+  - [Kubernetes Software Versions](#kubernetes-software-versions)
+  - [Cluster Upgrade Process](#cluster-upgrade-process)
+    - [When should you upgrade](#when-should-you-upgrade)
+    - [Upgrade Process](#upgrade-process)
+    - [Kubeadm - upgrade](#kubeadm---upgrade)
+  - [Backup and Restore Methods](#backup-and-restore-methods)
+    - [Resource Configuration Backup](#resource-configuration-backup)
+    - [Backup - ETCD](#backup---etcd)
+- [Security](#security)
+  - [Kubernetes Security Primitives](#kubernetes-security-primitives)
+  - [Authentication](#authentication)
+    - [User Authentication](#user-authentication)
+      - [Basic Auth Mechanisms](#basic-auth-mechanisms)
+  - [TLS](#tls)
+    - [TLS Basics](#tls-basics)
+      - [Asymmetric Encryption](#asymmetric-encryption)
+      - [Back to Certs](#back-to-certs)
+    - [TLS In Kubernetes](#tls-in-kubernetes)
+      - [Server Certificates for Servers](#server-certificates-for-servers)
+      - [Server Certificates for Servers](#server-certificates-for-servers-1)
+      - [Server Certificates for Servers](#server-certificates-for-servers-2)
+      - [Client Certificates for Clients](#client-certificates-for-clients)
+    - [TLS Certificate Creation](#tls-certificate-creation)
+      - [Certificate Authority Cert Creation](#certificate-authority-cert-creation)
+      - [Generating Client's Certificates](#generating-clients-certificates)
+      - [What to Do](#what-to-do)
+      - [Server Certificate Creation](#server-certificate-creation)
+  - [View Certificate Details](#view-certificate-details)
+    - [Health Check](#health-check)
+  - [Certificates API](#certificates-api)
+  - [KubeConfig](#kubeconfig)
+    - [File Format](#file-format)
+    - [Certificates in KubeConfig](#certificates-in-kubeconfig)
+  - [API Groups](#api-groups)
+  - [Role Based Access Controls](#role-based-access-controls)
+  - [Cluster Roles and Role Bindings](#cluster-roles-and-role-bindings)
+  - [Image Security](#image-security)
+  - [Security Context](#security-context)
+  - [Network Policy](#network-policy)
+    - [Traffic Basics](#traffic-basics)
+    - [Network Security in Kubernetes](#network-security-in-kubernetes)
+- [Storage](#storage)
+  - [Storage In Docker](#storage-in-docker)
+    - [Docker Layered Architecture](#docker-layered-architecture)
+    - [Volumes](#volumes)
+  - [Container Storage Interface](#container-storage-interface)
+    - [What CSI Looks Like](#what-csi-looks-like)
+  - [Volumes](#volumes-1)
+  - [Persistent Volumes](#persistent-volumes)
+  - [Persistent Volume Claims](#persistent-volume-claims)
+  - [Using Persistent Volume Claims in PODS](#using-persistent-volume-claims-in-pods)
+- [Networking](#networking)
+  - [Switching Routing](#switching-routing)
+    - [Switching](#switching)
+    - [Routing](#routing)
+    - [Gateway](#gateway)
+      - [Default Gateway](#default-gateway)
+    - [Key Networking Commands](#key-networking-commands)
+  - [DNS](#dns-1)
+    - [Private Domain Names](#private-domain-names)
+    - [Record Types](#record-types)
+    - [Other Tools to Communicate with Hosts](#other-tools-to-communicate-with-hosts)
+  - [CoreDNS](#coredns)
+  - [Network Namespaces](#network-namespaces)
+    - [Connect Networks](#connect-networks)
+    - [Network Commands Summary](#network-commands-summary)
+  - [Docker Networking](#docker-networking)
+    - [Docker Bridge Networks](#docker-bridge-networks)
+  - [Container Networking Interface (CNI)](#container-networking-interface-cni)
+  - [CLuster Networking](#cluster-networking)
+  - [Pod Networking](#pod-networking)
+  - [CNI in Kubernetes](#cni-in-kubernetes)
+  - [CNI Weave](#cni-weave)
+  - [IP Address Management - Weave](#ip-address-management---weave)
+    - [How Weave Does It](#how-weave-does-it)
+  - [Service Networking](#service-networking)
+  - [DNS In Kubernetes](#dns-in-kubernetes)
+  - [CoreDNS in Kubernetes](#coredns-in-kubernetes)
+  - [Ingress](#ingress)
+    - [Services vs Ingress](#services-vs-ingress)
+- [Quick Notes](#quick-notes)
+  - [Editing Pods and Deployments](#editing-pods-and-deployments)
+    - [Edit a POD](#edit-a-pod)
+    - [Edit Deployments](#edit-deployments)
+  - [Check for Port Clashing](#check-for-port-clashing)
+  - [Create all the files in a folder](#create-all-the-files-in-a-folder)
+  - [Check Number of Applications](#check-number-of-applications)
+  - [Inspect Authorization Types](#inspect-authorization-types)
+  - [Check to see which user is used to execute a process](#check-to-see-which-user-is-used-to-execute-a-process)
+  - [Network Namespaces Checks](#network-namespaces-checks)
+  - [Handy Networking Commands](#handy-networking-commands)
+  - [Get the IP of a Pod / nod](#get-the-ip-of-a-pod--nod)
+  - [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
+- [End Table of Contents](#end-table-of-contents)
+- [- End Table of Contents](#ul-liend-table-of-contentsli-ul-1)
+>>>>>>> 902ffde0becbdd7517475549f2e813605e27d1db
 
 
 # Core Concepts
@@ -5133,7 +5341,7 @@ More Info About CoreDNS here:
 
 * Similarly, when you create services of type `NodePort`, kube-proxy creates iptable rules to forward all traffic coming on a port on all nodes to the respective backend PODs. 
   * Kube-proxy creates these entries in the kube-proxy logs itself. In the logs, you will find what proxier it uses. In this case its IP tables 
-      
+    
      
 
 
@@ -5159,7 +5367,112 @@ More Info About CoreDNS here:
         * In this case since all the pods were in the same namespace, you were able to reach the web service using just the service name, `web-service`
           * If you want to reach the web service in a different namespace named `apps`
             * You would have to say `curl http://web-service.apps`
+            ![dns-namespace-example](/images/dns-namespace-example.png) 
+            * Web-service is name of the server
+            * Apps is the name of the namespace
+          * For each namespace the DNS server creates a subdomain.
+            * All the services are grouped together into another subdomain called `SVC`
+              * So you can reach your application with the name `web-service.apps.svc`
+                  * `http://web-service.apps.svc`
+            * Finally, all the services and PODS are grouped together into a root domain for the cluster, whichi is set to `cluster.local` by default. 
+              * Can access the service using the URL: `web-service.apps.svc.cluster.local` and that's the fully qualified domain name for the service.
+                * `curl http://web-service.apps.svc.cluster.local`
+            ![cluster.local.svc](/images/cluster-local-svc.jpg) 
 
+      * What about Records for PODS? 
+        * By default, records are not created for PODS.
+          * Can enable that explicity
+        * Once enabled, records are created by pods as well
+          * Does not use the POD name though.
+            * For each pod, Kubernetes generates a name by repalcing the dots `.` in the IP address with dashes `-`
+              * `10.244.2.5 -> 10-244-2-5`
+            * Namespaces remains the same and the type is set to pod. 
+            * Root domain is always `cluster.local`
+              * `curl http://10-244-2-5.apps.pod.cluster.local`
+            ![cluster.local.pod](/images/cluster-local-pod.jpg)
+        * Similarly, test pod in the default namespace gets a record in the DNS server, with its IP converted to a dashed hostname `10.244.1.5`, namespace set to default, type is pod and root is cluster.local. 
+        * Resolves to the IP Address in the pod
+
+## CoreDNS in Kubernetes
+  * CoreDNS server is deployed as a POD in the kube-system namespace in the kubernetes cluster. 
+    * Deployed as two pods for redundancy as part of a replicaset
+      * Actually a replicaset within a deployment.
+
+  * Just think of it as a Pod 
+  * CoreDNS requires a configuartion file. 
+    * `cat /etc/coredns/Corefile`
+        ```json
+
+          .:53 {
+              errors
+              health
+              kubernetes cluster.local in addr.arpa ip6.arpa {
+                pods insecure
+                upstream
+                fallthrough in-addr.arpa ip6.arpa
+              }
+              prometheus :9153
+              proxy . /etc/resolv.conf
+              cache 30
+              reload
+          }
+        ```
+      * Set to use the name server from the kubernetes node. 
+      * Core file is passed in to the pod as a configmap
+        * `kubectl get configmap -n kube-system`
+           ```
+            Name            Data      Age
+            coredns         1         168d
+           ```
+      
+      * Next step is for the Pod to point to the coreDNS server. 
+        * What address do PODs use to reach the DNS server? 
+          * When CoreDNS solution is deployed, it also creates a service to make it available to other componentes within a cluster.
+          * Service is named `kube-dns` by default. 
+            * `kubectl get service -n kube-system` 
+          * IP address of services is configured as the `nameserver` on pods
+            * `cat /etc/resolv.conf`
+            * Don't have to create this yourself, DNS configs on PODs are done by kubernetes automatically when the PODs are created.
+            * Kubelet is responsible for that. 
+              * If you look at config file of the kubelet, you will see the IP of the DNS server and domain in it. 
+                ![coredns-files](/images/coredns-files.jpg)
+              * Once the pods are configured with the right nameservers, you can now resolve other pods and services
+                * You can access the web-service using just 
+                  * `web-service`
+                  * `web-service.default`
+                  * `web-service.default.svc`
+                  * Or `web-service.default.svc.cluster.local`
+                * If you try to manually lookup the web-service using `nslookup` or the `host` command, it will return the fully qualified domain name. 
+                  * This is because the `resolv.conf` file also has a search entry which is set to `default.svc.cluster.local` as well as `svc.cluster.local` and `cluster.local`
+                  * However, it only has entries for service, you won't be able to access the pod the same way. 
+                    * for that you need to specify the Fully Qualified Domain Name(FQDN)
+
+
+## Ingress
+
+### Services vs Ingress
+  
+  * Start with scenario: 
+    * You are deploying an application on kubernetes for a company that has a nonline store selling products. 
+    * App would be available at `www.my-online-store.com`
+    * Build the application into a Docker Image and deploy it on the kubernetes cluster as a POD in a Deployment. 
+    * Your application needs a database so you deploy a MySQL DB as a POD 
+    * Create a service of type ClusterIP called `mysql-service` to make it accessible to your application. 
+
+  * App is now working. Still need to make the application accessible to the outside world
+    * Create another service, type `NodePort` and make your applicaiton available on a high-port on the nodes in the cluster. 
+
+    * In Image below, port 38080 is allocated for the service. 
+    * Users can now acess your application using the URL `http://<node-ip>:38080` 
+  * Whenever traffic increases, we increase the number of replicas of the pod to handle the additional traffic 
+   
+  ![service-app-example](/images/service-app-example.jpg)
+
+  * However, if you've deployed a production grade app before, you know that there are many more things involved in addition simply splitting the traffic between pods.
+  * 
+
+           
+   
 
 
 
@@ -5259,7 +5572,9 @@ More Info About CoreDNS here:
 
 
 # End Table of Contents
+<<<<<<< HEAD
 - [Table of Contents](#table-of-contents)
+- [- End Table of Contents](#ul-liend-table-of-contentsli-ul)
 - [Core Concepts](#core-concepts)
   - [Cluster Architecture](#cluster-architecture)
   - [ETCD](#etcd)
@@ -5440,6 +5755,9 @@ More Info About CoreDNS here:
     - [How Weave Does It](#how-weave-does-it)
   - [Service Networking](#service-networking)
   - [DNS In Kubernetes](#dns-in-kubernetes)
+  - [CoreDNS in Kubernetes](#coredns-in-kubernetes)
+  - [Ingress](#ingress)
+    - [Services vs Ingress](#services-vs-ingress)
 - [Quick Notes](#quick-notes)
   - [Editing Pods and Deployments](#editing-pods-and-deployments)
     - [Edit a POD](#edit-a-pod)
@@ -5454,3 +5772,206 @@ More Info About CoreDNS here:
   - [Get the IP of a Pod / nod](#get-the-ip-of-a-pod--nod)
   - [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
 - [End Table of Contents](#end-table-of-contents)
+- [- End Table of Contents](#ul-liend-table-of-contentsli-ul-1)
+=======
+- [Table of Contents](#table-of-contents)
+- [- End Table of Contents](#ul-liend-table-of-contentsli-ul)
+- [Core Concepts](#core-concepts)
+  - [Cluster Architecture](#cluster-architecture)
+  - [ETCD](#etcd)
+    - [ETCD For Beginners](#etcd-for-beginners)
+    - [ETCD in Kubernetes](#etcd-in-kubernetes)
+  - [Kube-API Server](#kube-api-server)
+  - [Kube Controller Manager](#kube-controller-manager)
+  - [Kube Scheduler](#kube-scheduler)
+  - [Kubelet](#kubelet)
+  - [Kube Proxy](#kube-proxy)
+  - [PODs](#pods)
+    - [Recap](#recap)
+    - [How to deploy Pods](#how-to-deploy-pods)
+    - [PODs with YAML](#pods-with-yaml)
+  - [ReplicaSets](#replicasets)
+    - [Creating a Replication Controller](#creating-a-replication-controller)
+    - [Creating a ReplicaSet](#creating-a-replicaset)
+    - [Labels and Selectors](#labels-and-selectors)
+  - [Deployments](#deployments)
+    - [What is a Deployment](#what-is-a-deployment)
+    - [Definition](#definition)
+  - [Helpful Pod Commands](#helpful-pod-commands)
+  - [Namespaces](#namespaces)
+    - [Basics](#basics)
+    - [Resource Limits](#resource-limits)
+    - [DNS](#dns)
+    - [Commands](#commands)
+      - [Create Namespace Like](#create-namespace-like)
+      - [Create a Resource Quota](#create-a-resource-quota)
+  - [Services](#services)
+    - [Services Use Case](#services-use-case)
+    - [Service Types - Basics](#service-types---basics)
+    - [NodePort](#nodeport)
+    - [Cluster IP](#cluster-ip)
+      - [Creation](#creation)
+  - [Imperative Commands](#imperative-commands)
+    - [POD](#pod)
+    - [Deployment](#deployment)
+    - [Service](#service)
+    - [Misc.](#misc)
+- [Scheduling](#scheduling)
+  - [Manual Scheduling](#manual-scheduling)
+    - [Labels and Selectors](#labels-and-selectors-1)
+    - [Creating Labels](#creating-labels)
+    - [Selectors](#selectors)
+    - [Annotations](#annotations)
+  - [Taints and Tolerations](#taints-and-tolerations)
+    - [Commands](#commands-1)
+    - [Master Nodes](#master-nodes)
+  - [Node Selectors](#node-selectors)
+    - [Limitations](#limitations)
+  - [Node Affinity](#node-affinity)
+    - [Node Affinity Types](#node-affinity-types)
+  - [Node Affinity Vs Taints and Tolerations](#node-affinity-vs-taints-and-tolerations)
+  - [Resource Requirements and Limits](#resource-requirements-and-limits)
+    - [Resource Limits](#resource-limits-1)
+  - [Daemon Sets](#daemon-sets)
+    - [Use Case](#use-case)
+    - [Creation](#creation-1)
+    - [How it works](#how-it-works)
+  - [Static Pods](#static-pods)
+    - [Why Use These?](#why-use-these)
+    - [Static PODs vs DaemonSets](#static-pods-vs-daemonsets)
+    - [Delete Static Pods on other nodes](#delete-static-pods-on-other-nodes)
+  - [Multiple Schedulers](#multiple-schedulers)
+    - [Deploy Additional Scheduler](#deploy-additional-scheduler)
+      - [Deploy Additional Scheduler - Kubeadm](#deploy-additional-scheduler---kubeadm)
+      - [View Schedulers](#view-schedulers)
+      - [Use Custom Scheduler](#use-custom-scheduler)
+    - [View Scheduler Logs and Events](#view-scheduler-logs-and-events)
+  - [Configuring Kubernetes Scheduler](#configuring-kubernetes-scheduler)
+- [Logging and Monitoring](#logging-and-monitoring)
+  - [Monitor Cluster Components](#monitor-cluster-components)
+    - [Heapster vs Metrics Server](#heapster-vs-metrics-server)
+    - [Metrics Server -- Getting Started](#metrics-server----getting-started)
+  - [Managing Application Logs](#managing-application-logs)
+    - [Logs - Docker](#logs---docker)
+    - [Logs - Kubernetes](#logs---kubernetes)
+- [Application Lifecycle Management](#application-lifecycle-management)
+  - [Rolling Updates and Rollbacks](#rolling-updates-and-rollbacks)
+    - [Deployment Strategies](#deployment-strategies)
+    - [Kubectl apply](#kubectl-apply)
+    - [Upgrades](#upgrades)
+    - [Rollback](#rollback)
+    - [Kubectl run](#kubectl-run)
+    - [Summarize-Commands](#summarize-commands)
+  - [Configure Applications](#configure-applications)
+  - [Application Commands - Docker](#application-commands---docker)
+  - [Application Commands & Arguments](#application-commands--arguments)
+  - [Configure Environment Variables in Applications](#configure-environment-variables-in-applications)
+    - [Config Maps](#config-maps)
+      - [Create the ConfigMaps](#create-the-configmaps)
+      - [Inject them into the pod.](#inject-them-into-the-pod)
+    - [Secrets](#secrets)
+      - [Creating a Secret](#creating-a-secret)
+      - [Configuring Secrets With Pod](#configuring-secrets-with-pod)
+      - [Secrets Notes](#secrets-notes)
+  - [Multi Container PODs](#multi-container-pods)
+    - [Create Multi Container Pod](#create-multi-container-pod)
+    - [Multi Container PODs Design Patterns](#multi-container-pods-design-patterns)
+  - [InitContainers](#initcontainers)
+- [Cluster Maintenance](#cluster-maintenance)
+  - [OS Upgrades](#os-upgrades)
+  - [Kubernetes Software Versions](#kubernetes-software-versions)
+  - [Cluster Upgrade Process](#cluster-upgrade-process)
+    - [When should you upgrade](#when-should-you-upgrade)
+    - [Upgrade Process](#upgrade-process)
+    - [Kubeadm - upgrade](#kubeadm---upgrade)
+  - [Backup and Restore Methods](#backup-and-restore-methods)
+    - [Resource Configuration Backup](#resource-configuration-backup)
+    - [Backup - ETCD](#backup---etcd)
+- [Security](#security)
+  - [Kubernetes Security Primitives](#kubernetes-security-primitives)
+  - [Authentication](#authentication)
+    - [User Authentication](#user-authentication)
+      - [Basic Auth Mechanisms](#basic-auth-mechanisms)
+  - [TLS](#tls)
+    - [TLS Basics](#tls-basics)
+      - [Asymmetric Encryption](#asymmetric-encryption)
+      - [Back to Certs](#back-to-certs)
+    - [TLS In Kubernetes](#tls-in-kubernetes)
+      - [Server Certificates for Servers](#server-certificates-for-servers)
+      - [Server Certificates for Servers](#server-certificates-for-servers-1)
+      - [Server Certificates for Servers](#server-certificates-for-servers-2)
+      - [Client Certificates for Clients](#client-certificates-for-clients)
+    - [TLS Certificate Creation](#tls-certificate-creation)
+      - [Certificate Authority Cert Creation](#certificate-authority-cert-creation)
+      - [Generating Client's Certificates](#generating-clients-certificates)
+      - [What to Do](#what-to-do)
+      - [Server Certificate Creation](#server-certificate-creation)
+  - [View Certificate Details](#view-certificate-details)
+    - [Health Check](#health-check)
+  - [Certificates API](#certificates-api)
+  - [KubeConfig](#kubeconfig)
+    - [File Format](#file-format)
+    - [Certificates in KubeConfig](#certificates-in-kubeconfig)
+  - [API Groups](#api-groups)
+  - [Role Based Access Controls](#role-based-access-controls)
+  - [Cluster Roles and Role Bindings](#cluster-roles-and-role-bindings)
+  - [Image Security](#image-security)
+  - [Security Context](#security-context)
+  - [Network Policy](#network-policy)
+    - [Traffic Basics](#traffic-basics)
+    - [Network Security in Kubernetes](#network-security-in-kubernetes)
+- [Storage](#storage)
+  - [Storage In Docker](#storage-in-docker)
+    - [Docker Layered Architecture](#docker-layered-architecture)
+    - [Volumes](#volumes)
+  - [Container Storage Interface](#container-storage-interface)
+    - [What CSI Looks Like](#what-csi-looks-like)
+  - [Volumes](#volumes-1)
+  - [Persistent Volumes](#persistent-volumes)
+  - [Persistent Volume Claims](#persistent-volume-claims)
+  - [Using Persistent Volume Claims in PODS](#using-persistent-volume-claims-in-pods)
+- [Networking](#networking)
+  - [Switching Routing](#switching-routing)
+    - [Switching](#switching)
+    - [Routing](#routing)
+    - [Gateway](#gateway)
+      - [Default Gateway](#default-gateway)
+    - [Key Networking Commands](#key-networking-commands)
+  - [DNS](#dns-1)
+    - [Private Domain Names](#private-domain-names)
+    - [Record Types](#record-types)
+    - [Other Tools to Communicate with Hosts](#other-tools-to-communicate-with-hosts)
+  - [CoreDNS](#coredns)
+  - [Network Namespaces](#network-namespaces)
+    - [Connect Networks](#connect-networks)
+    - [Network Commands Summary](#network-commands-summary)
+  - [Docker Networking](#docker-networking)
+    - [Docker Bridge Networks](#docker-bridge-networks)
+  - [Container Networking Interface (CNI)](#container-networking-interface-cni)
+  - [CLuster Networking](#cluster-networking)
+  - [Pod Networking](#pod-networking)
+  - [CNI in Kubernetes](#cni-in-kubernetes)
+  - [CNI Weave](#cni-weave)
+  - [IP Address Management - Weave](#ip-address-management---weave)
+    - [How Weave Does It](#how-weave-does-it)
+  - [Service Networking](#service-networking)
+  - [DNS In Kubernetes](#dns-in-kubernetes)
+  - [CoreDNS in Kubernetes](#coredns-in-kubernetes)
+  - [Ingress](#ingress)
+    - [Services vs Ingress](#services-vs-ingress)
+- [Quick Notes](#quick-notes)
+  - [Editing Pods and Deployments](#editing-pods-and-deployments)
+    - [Edit a POD](#edit-a-pod)
+    - [Edit Deployments](#edit-deployments)
+  - [Check for Port Clashing](#check-for-port-clashing)
+  - [Create all the files in a folder](#create-all-the-files-in-a-folder)
+  - [Check Number of Applications](#check-number-of-applications)
+  - [Inspect Authorization Types](#inspect-authorization-types)
+  - [Check to see which user is used to execute a process](#check-to-see-which-user-is-used-to-execute-a-process)
+  - [Network Namespaces Checks](#network-namespaces-checks)
+  - [Handy Networking Commands](#handy-networking-commands)
+  - [Get the IP of a Pod / nod](#get-the-ip-of-a-pod--nod)
+  - [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
+- [End Table of Contents](#end-table-of-contents)
+- [- End Table of Contents](#ul-liend-table-of-contentsli-ul-1)
+>>>>>>> 902ffde0becbdd7517475549f2e813605e27d1db
