@@ -189,6 +189,12 @@
     - [Ingress Controller](#ingress-controller)
     - [Ingress Resources](#ingress-resources)
   - [Ingress - Annotations and rewrite-target](#ingress---annotations-and-rewrite-target)
+- [Kubernetes the Hard Way](#kubernetes-the-hard-way)
+  - [Configure High Availability](#configure-high-availability)
+    - [Example High Availability](#example-high-availability)
+    - [ETCD High Availability](#etcd-high-availability)
+    - [Our Design](#our-design)
+  - [ETCD in HA](#etcd-in-ha)
 - [Quick Notes](#quick-notes)
   - [Editing Pods and Deployments](#editing-pods-and-deployments)
     - [Edit a POD](#edit-a-pod)
@@ -5612,8 +5618,125 @@ More Info About CoreDNS here:
 
 
 
+# Kubernetes the Hard Way
+
+## Configure High Availability
+
+* What happens when you lose the master node in your cluster? 
+  * As long as the workers are up and containers are alive, your applications are still running.
+  * Users can access the application until things start to fail
+    * Like if a container or POD on the worker node crashes. 
+    * If that pod was part of a replicaset, the the replication controller on the master needs to insruct the worker to load a new pod. 
+    * But the Master is not availble and neither are the controllers and schedulers on the master.
+      * No one to schedule it on nodes. 
+      * Similarly, since the kube-api server is not available you cannot access the cluster extreanlly through kubectl tool or through API for management purposes. 
+      * Must consider  **Multiple Master Nodes** in a High Availability configuration.
+* High availability configuration is where you have redundancy across every component in the cluster to avoid a single point of failure
+  * Master Nodes
+  * Worker Nodes
+  * Control Plane components
+  * Application(already have multiple copies because of replicasets and services)
+  * Focus is going to be on the master and control plane components. 
+
+### Example High Availability
+
+* So far we've been looking at a 3 node cluster with 1 master and 2 worker nodes
+* Master node hosts the control plane components
+  * API Controller Manager
+  * Scheduler
+  * ETCD server
+* In a HA setup, with an addiontal master node, you have the same componetns running on the new master as well
+* How does that work? Are they going to do the same thing twice? How do they share the work among themselves? 
+  * Differs based on what they do. 
+  * know that API server is responsible for receiving requests and processing them
+    * Work on one request at a time.
+      * So the API servers on all cluster nodes can be alive and running at the same time in an active mode. 
+    * We know that the kubectl utility talks to the API server to get things done and we talk to the API server to get things done.
+    * Point the kubectl utility to reach the master node at port `6443`
+    * That's where the API server listens and this is configured in the kube-config file. 
+    * With 2 masters, where do we point the kubectl to? 
+      * Can send request to one, not both. 
+      * Set up a load alancer of some kind coinfugred in front of the maste rnoes that split traffic between the API servers. 
+      * Point the `kubectl` uitlity to the load balacner.
+      * Can use NGINx or HA proxy or any other load balancer for this purpose. 
+
+* Scheduler and the controller manager: 
+  * These are controllers that watch the Stae of the cluster and take actions. 
+  * These are controllers that watch the State of the cluster and take actions.
+    * IE. the controller manager consists of controllers like the replication controller that is constantly watching the state of PODs and taking necessary actions
+      * Like creating a new POD when one fails
+  * If multiple instances of those run in parallel, then they might duplicate actions resulting in more parts than actually neeed. 
+  * Same is true for the scheduler. So must **Not** Run in parallel. 
+  * They run in an active standby mode.
+
+  * `Leader election process` decides which among the two is acctive and which is standby. 
+    * May specify the leader elect option which is set to true by default
+      * `kube-controller-manager --leader-elect true [other-options]`
+    * When the controller manager process starts, it tries to gain a leaser or a lock on an endpoint object in kubernetes named as kube-controller-manager endpoint. 
+      * Whichever process first updates the endpoint, gains lease and becomes active of the two.
+      * Other becomes passive
+      * Holds the lock for the lease duration specified using the `leader-elect-lease-duration` option which is by default set to 15 seconds
+        * `--leader-eleect-lease-duration 15s`
+      * active process the nrenews the lease every 10 secondsn which is the default value for the option
+        * `--leader-elect-renew-deadline 10s`
+      * Both the processes tries to become the leader every two seconds, set by:
+        * `--leader-elect-retry-period 2s`
+        * If one process fails, maybe because the first master crashes, 
+          * second process can acquire the lock and become the leader.
+
+  ![master-lock-ha](/images/master-lock-ha.jpg)
+  * Same thing with scheduler and same command line options
+
+### ETCD High Availability 
+* Two topologies you can configure
+  *  **Stacked Topology** Where ETCD is part kubernetes is part of the master node
+     *  Easier to setup
+     *  Easier to manage
+     *  Fewer Servers
+     *  **BUT** There is a risk during failures
+        *  If one node goes down, both the controle plane instances and ETCD member are lost
+  *  **External ETCD Topology** ETCD is seperated from the control plane nodes and run onts own set of servers
+     *  ![External-ETCD-Topology](/images/external-etcd-topology.jpg)
+     *  Less risky - failed control plane node does not impact the ETCD cluster and the data it stores
+     *  **BUT** Harder to setup
+        * Requires twice the number of servers. 
+
+* API server is the only component that talks to the ETCD server and if you look into the API service config options, we have a set of options specifying where the ETCD server is. 
+  * `cat /etc/systemd/system/kube-apiserver.service`
+    ![kube-api-server-etcd-servers](/images/kube-apiserver-service-server.jpg)
+  * Regardless of topology we use, need to make sure the API server is pointing to the right address of the ETCD servers. 
+  * Since ETCD is a distributed system, the API server or any other component can reach the ETCD server at any of its instances. 
+    * can read and write data through any of instances
+    * Why we specify a list of etcd-servers in the kube-apiservers configuration.
 
 
+### Our Design
+  * Multiple masters now with HA 
+  * Also a load balancer
+  * Worker Nodes
+   ![example-cluster-design](/images/example-cluster-design.jpg)
+
+
+## ETCD in HA
+
+* ETCD is distributed, what does that mean? 
+  * We had ETCD on a single server, but it's a db and may be storing critical data.
+    * Possible to have your datastore across multiple servers.
+    * Now you have 3 servers, all running etcd, and all maintaining an identical copy of the db. 
+    * If you lose one, you still have two copies of your data
+  * How does it ensure that data across the nodes is consistent?
+    * With reads, easy since same data is available across all nodes, you can read from any node
+    * With writes it's a little bit trickier
+      * What if you have two write reequests coming in on two different instances? which one goes through? 
+      * **Example**:
+        * Have writes coming in for name set to john on one and with the name Joe on the other. 
+        * Can't have two different data on two different nodes. 
+        * However ETCD does not process the writes on each node, only one instance is responsible for processing the writes internally. 
+        * Leader node and follower nodes.
+          * If write comes through the leader, it processes it and distributed to other nodes in cluster
+          * Otherwise write is sent to leader to be processed. Thus a write is only considered complete if the leader gets consent from other members in the cluster
+      * Leader election happens via RAFT protocol
+      * 
 
 
 
@@ -5896,6 +6019,12 @@ More Info About CoreDNS here:
     - [Ingress Controller](#ingress-controller)
     - [Ingress Resources](#ingress-resources)
   - [Ingress - Annotations and rewrite-target](#ingress---annotations-and-rewrite-target)
+- [Kubernetes the Hard Way](#kubernetes-the-hard-way)
+  - [Configure High Availability](#configure-high-availability)
+    - [Example High Availability](#example-high-availability)
+    - [ETCD High Availability](#etcd-high-availability)
+    - [Our Design](#our-design)
+  - [ETCD in HA](#etcd-in-ha)
 - [Quick Notes](#quick-notes)
   - [Editing Pods and Deployments](#editing-pods-and-deployments)
     - [Edit a POD](#edit-a-pod)
