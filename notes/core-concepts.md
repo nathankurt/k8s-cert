@@ -195,6 +195,16 @@
     - [ETCD High Availability](#etcd-high-availability)
     - [Our Design](#our-design)
   - [ETCD in HA](#etcd-in-ha)
+- [End to End Tests on a Kubernetes Cluster](#end-to-end-tests-on-a-kubernetes-cluster)
+  - [End to End Tests](#end-to-end-tests)
+    - [Test - Manual](#test---manual)
+    - [Test Suites](#test-suites)
+  - [End to End Tests - Run and Analyze](#end-to-end-tests---run-and-analyze)
+- [Troubleshooting](#troubleshooting)
+  - [Application Failure](#application-failure)
+    - [Check Accessibility](#check-accessibility)
+    - [Check Pods](#check-pods)
+  - [Control Plane Failure](#control-plane-failure)
 - [Quick Notes](#quick-notes)
   - [Editing Pods and Deployments](#editing-pods-and-deployments)
     - [Edit a POD](#edit-a-pod)
@@ -5735,10 +5745,147 @@ More Info About CoreDNS here:
         * Leader node and follower nodes.
           * If write comes through the leader, it processes it and distributed to other nodes in cluster
           * Otherwise write is sent to leader to be processed. Thus a write is only considered complete if the leader gets consent from other members in the cluster
-      * Leader election happens via RAFT protocol
-      * 
+      * Leader election happens via RAFT protocol 
 
 
+
+# End to End Tests on a Kubernetes Cluster
+
+## End to End Tests
+
+### Test - Manual
+  * important to test our cluster to make sure all components are functioning as expected
+  * begin with lets see what we can test manually. 
+    * start by looking at status of nodes see if al healthy
+      * `kubectl get nodes`
+    * then check pod status
+      * `kubectl get pods running on cluster`
+    * if we had control plane components deployed as pods, like cluster deployed with kubeadm, we can check to make sure that the pods in the kube-system namespace are running. 
+      * `kubectl get pods -n kube-system`
+    * If control plane components are deployed as services, then check the status of the services. 
+      * `service kube-apiserver status`
+      * `service kube-controller-manager status`
+      * `service kube-scheduler status`
+      * `service kubelet status`
+      * `service kube-proxy status`
+    * Could then check to see if we are able to deploy pods correctly. 
+      * try an nginx apps and see if it deploys the pods correctly. 
+        * `kubectl run nginx`
+        * `kubectl get pods`
+      * Try scaling it to deploy multiple instances, to make sure pods get distributed across all the nodes in the cluster. 
+        * `kubectl scale --replicas=3 deploy/nginx`
+        * `kubectl get pods`
+      * Try exposing the application to test services and see if you're able to access.
+        * `kubectl expose deployment nginx --port=80 --type=NodePort`
+        * `kubectl get service`
+        * `curl http://worker-1:31850`
+    * This is a lot of tests, This is where test suites help you. 
+### Test Suites
+  * Kubernetes has a supported test suite that can help us perform end to end tests
+  * Maintained in the test-infra repo on github. 
+  * `kubetest` runs bout 1000 different tests end to end. 
+  * Split up into categories
+    * `sig-api-machinery`
+    * `sig-apps`
+    * `sig-auth`
+    * `sig-cli`
+    * `sig-network`
+    * `sig-scheduling`
+    * `sig-storage`
+
+  * Some examples: 
+    * Networking should function for intra-pod communication (http)
+    * "Services should serve a basic endpoint from pods
+    * Service endpoints latency should not be very high
+    * DNS should provide DNS for services. 
+  
+  * **How does it execute?**
+    1. **Prepare:** Creates a namespace for this test 
+    2. Creates test pod in this namespace, waits for pods to come up
+    3. **Test:** Executes curl on one pod to reach the IP of another over HTTP
+    4. Record the result. 
+
+
+## End to End Tests - Run and Analyze
+
+* To run the tests you have to have Golang installed.
+  * Run `go get -u k8s.io/test-infra/kubetest`
+  * `kubetest --extract=v1.11.3`
+    * Note: Version must match the kubernetes server version
+  * `cd kubernetes`
+  * `export KUBE_MASTER_IP="192.168.26.10:6443"`
+  * `export KUBE_MASTER=kube-master`
+  * `kubetest --test --provider=skeleton > testout.txt`
+    * Skeleton specifies local cluster. 
+  * Can run a subset of these tests by passing in additional arg to focus on conformance section alone or some specific feature set within the cluster. 
+  * `kubetest --test --provider=skeleton --test_args="--ginkgo.focus=Secrets" > testout.txt`
+  * `kubetest --test --provider=skeleton --test_args="--ginkgo.focu=\[Conformance\]" > testout.txt`
+  * After you run that, you will get atext file with infor on all of the tests and a summary at the end. 
+    * ![kubetest-run](/images/kubetest-run.jpg)
+
+# Troubleshooting
+
+## Application Failure
+
+### Check Accessibility
+  
+  * Two tier application that has a web and a databaes server.
+    * DB pod hosting a database and serving the web servers through a database service
+    * Web server is hosted on a web pod and serves users through the web service. 
+  * Good to write down or draw a map or chart of how your application is configured 
+  ![troubleshooting-example-01](/images/troubleshooting-example-01.jpg)
+  * Depending on how much you know about the failure, you may choose to start from either end of map. 
+    * Check every object and link in this map until you find the issue.
+
+  * **Say users report some issue with accessing the application**
+    * First we start with the appliccation front-end, use standard ways of testing if your app is accecssible.
+      * If web application, check the web server is accessible on the IP of the node-port using curl. 
+        * `curl http://webservice-ip:node-port`
+      * Next, check the service. Has it discovered endpoints for the web pod? 
+        * `kubectl describe service web-service`
+        * If it did not, may want to check the service to pod discovery. **Compare the selectors** configured on the service to the ones on the pod and make sure they match. 
+          * ![troubleshooting-example-02](/images/troubleshooting-example-02.jpg)
+
+### Check Pods
+  * Next, check the pod itself and make sure it's in a running state. 
+    * **status** of the pod as well as **# of restarts**  
+      * Check the events related to the pod using the `kubectl describe` command. 
+      * If the pod is restarting due to a failure, then the logs in the current version of the pod that's running the current version of the pod, may not reflect why it failed last time. 
+          * Either have to watch these logs using the `-f` option and wait for the application to fail again
+          * Or use the `--previous` option to view the logs of a previous pod.
+
+  * Next check the status of the db-service as before, and finally check the db pod itself. 
+    * Check the logs of the DB pod and look for any errors in the database.
+
+More tips documented in the kubernetes documentation [Troubleshooting Guide](https://kubernetes.io/docs/tasks/debug-application-cluster/debug-application)
+
+
+       
+   
+## Control Plane Failure
+
+  * Start by checking the status of the nodes in the cluster, see if they are all healthy
+    * `kubectl get nodes`
+  * Then Check status of pods running on the cluster. 
+    * `kubectl get pods`
+  * If control plane components deployed with pods (**kubeadm**):
+    * check to make sure that the pods in the kube-system namespace are running
+  
+  * Otherwise if control plane components are deployed as services 
+    * check the status of the services such as the kube-apiserver, kube-controller-manager, kube-scheduler on *master* nodes
+      * `service kube-apiserver status`
+      * `service kube-controller-manager status`
+      * `service kube-scheduler status`
+  ![troubleshooting-example-03](/images/troubleshooting-example-03.jpg) 
+    * On Woker Nodes
+      * `service kubelet status`
+      * `service kube-proxy status` on the worker nodes
+    ![troubleshooting-example-04](/images/troubleshooting-example-04.jpg)
+
+  * Next, check the logs of the control plane components 
+
+
+   
 
 
 # Quick Notes
@@ -6025,6 +6172,16 @@ More Info About CoreDNS here:
     - [ETCD High Availability](#etcd-high-availability)
     - [Our Design](#our-design)
   - [ETCD in HA](#etcd-in-ha)
+- [End to End Tests on a Kubernetes Cluster](#end-to-end-tests-on-a-kubernetes-cluster)
+  - [End to End Tests](#end-to-end-tests)
+    - [Test - Manual](#test---manual)
+    - [Test Suites](#test-suites)
+  - [End to End Tests - Run and Analyze](#end-to-end-tests---run-and-analyze)
+- [Troubleshooting](#troubleshooting)
+  - [Application Failure](#application-failure)
+    - [Check Accessibility](#check-accessibility)
+    - [Check Pods](#check-pods)
+  - [Control Plane Failure](#control-plane-failure)
 - [Quick Notes](#quick-notes)
   - [Editing Pods and Deployments](#editing-pods-and-deployments)
     - [Edit a POD](#edit-a-pod)
