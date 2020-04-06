@@ -205,6 +205,17 @@
     - [Check Accessibility](#check-accessibility)
     - [Check Pods](#check-pods)
   - [Control Plane Failure](#control-plane-failure)
+    - [Control Plane Tips](#control-plane-tips)
+  - [Worker Node Failures](#worker-node-failures)
+    - [Check Kubelet Status](#check-kubelet-status)
+    - [Check Certificates](#check-certificates)
+- [JSON-PATH](#json-path)
+  - [JSON PATH - Criteria](#json-path---criteria)
+  - [JSON PATH - Kubernetes](#json-path---kubernetes)
+    - [JSON PATH Examples](#json-path-examples)
+    - [Loops - Range](#loops---range)
+    - [JSON PATH for Custom Columns](#json-path-for-custom-columns)
+    - [JSON PATH for Sort](#json-path-for-sort)
 - [Quick Notes](#quick-notes)
   - [Editing Pods and Deployments](#editing-pods-and-deployments)
     - [Edit a POD](#edit-a-pod)
@@ -215,6 +226,7 @@
   - [Inspect Authorization Types](#inspect-authorization-types)
   - [Check to see which user is used to execute a process](#check-to-see-which-user-is-used-to-execute-a-process)
   - [Network Namespaces Checks](#network-namespaces-checks)
+  - [ETCD BACKUP Params](#etcd-backup-params)
   - [Handy Networking Commands](#handy-networking-commands)
   - [Get the IP of a Pod / nod](#get-the-ip-of-a-pod--nod)
   - [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
@@ -5883,9 +5895,245 @@ More tips documented in the kubernetes documentation [Troubleshooting Guide](htt
     ![troubleshooting-example-04](/images/troubleshooting-example-04.jpg)
 
   * Next, check the logs of the control plane components 
+    * (if kubeadm, use the kubectl logs command)
+      * `kubectl logs kube-apiserver-master -n kube-system`
+    * Otherwise you can just the `journalctl utility to view the kube-apiserver logs`
+      * `sudo journalctl -u kube-apiserver`
+
+### Control Plane Tips
+  * Manifest files - `/etc/kubernetes/manifests/X.yaml`
+  * `kubectl -n kube-system logs kube-controller-manager-master`
+    * Deployment wasn't scaling because of self signed cert naming issue 
+  * Deployment wasn't scaling and logs showed `unable to load client CA file: unable to load client CA file: open /etc/kubernetes/pki/front-proxy-ca.crt: no such file or directory` 
+    * Wrong path in the volume mounts so edit the `kube-controller-manager.yaml` and fix the path to be the correct path. 
 
 
+## Worker Node Failures
+
+* Start by checking the status of the node in the cluster, Ready or not ready? 
+  * If they are not ready, check details of pod using `kubectl describe node worker-1` command.
+    * Each node has a set of conditions that can point us in a direction as to why a node might have failed.  
+    * depending on status, either set to true, false, or unknown. 
+    * out of memory = `MemoryPressure` set to `True`
+    * Disk Capacity is low = `DiskPressure` set to `True`
+    * Too many processes = `PIDPressure` flag set to `True`
+    * If node is healthy as a whole, the `Ready` Flag is set to true
+    * When a worker node stops communicating with the master, may be due to a crash, these statuses are set to `unkonwn`.
+      * Can indicate possible loss of a node
+  * Check `LastHeartbeatTime` to find out the the time when the node might have crashed. 
    
+
+* Proceed to check the status of the node itself:
+  * If the node is online at all or is crashed
+    * `top` `df -h`
+    * If crashed, bring it back up. 
+
+
+### Check Kubelet Status
+
+* Check kubelet logs for possible issues
+  * `service kubelet status`
+  * `sudo journalctl -u kubelet`
+
+### Check Certificates
+  
+* Ensure certsare not expired and that they are part of the right group and issued by the right CA
+  * `openssl x509 -in /var/lib/kubelet/worker-1.crt -text`
+![troubleshooting-example-05](/images/troubleshooting-example-05.jpg)  
+
+
+
+# JSON-PATH
+
+* **YAML VS JSON**
+  * Basically the same thing but
+    * YAML uses indentation
+    * JSON uses braces 
+  * JSON PATH DATA: 
+
+    ```json
+      {
+        "car": {
+          "color": "blue",
+          "price": "$20,000"
+        }
+      }
+    ``` 
+  * QUERY
+    * $ is root element
+    * to Get car details
+      * `$.car`
+    * TO get car colors
+      * `$.car.color`
+        * Returns `blue`
+  * RESULT
+
+    ```json
+      {
+        "color": "blue",
+        "price": "$20,000"
+      }
+    ```  
+
+* Get first element of a list 
+* DATA:
+  ```json
+    [
+      "car",
+      "bus",
+      "truck",
+      "bike"
+    ]
+  ``` 
+* Query:
+  * Get 1st element 
+    * $[0]
+  * Get 1st and 4th element
+    * $[0,3]
+  * Get 1st to 4th element
+    * $[0:3] - Does not include the 4th element
+  * Get 1st to 8th element but every other
+    * $[0:8:2]
+      * `START:END:STEP`
+  * Get the last element in the list, even if number of items in array changes
+    * $[-1] - does not work in all implementations
+    * $[-1:0] - Start from last element all the way until the end
+    * $[-1:] - Same as above
+  * Get the last 3 elements
+    * $[-3:]
+
+* Wildcard 
+  * DATA:
+  ```json
+    {
+      "car": {
+        "color": "blue",
+        "price": "$12,000"
+      },
+      "bus": {
+        "color": "white",
+        "price": "$120,000"
+      }
+    }
+  ``` 
+  * Get all colors: 
+    * `$.*.color`
+  * Get all prices:
+    * `$.*.price`
+  * with list it's `$.[*]
+  
+
+## JSON PATH - Criteria 
+
+* Say you want to get all numbers greater than 40
+  * Data: 
+    ```json
+    [
+      12,
+      43,
+      12,
+      56
+      43,
+      93,
+      32,
+      45,
+      63,
+      27,
+      8,
+      78
+    ]
+    ``` 
+  Query would be 
+  * $[Check if each item in the array > 40 ]
+    * Check if => ?()
+    * $[?(each item in the list > 40 )]
+      * each item in the list => @
+      * `$[?(@ > 40)]`
+    * Can also do things like `@ == 40`,`@ != 40` , `@ in [40,43,45]`, `@ nin [40,43,45]`
+
+  * Get the first names of all winners of the year 2014 in list of Noble Prize winners
+    * `$.prizes[?(@.year == "2014")].laureates[*].firstname`
+
+
+## JSON PATH - Kubernetes
+
+* Why JSON PATH?
+  * Large data sets
+    * 100s of Nodes
+    * 100s of PODs, Deployments, ReplicaSets
+  * kube-apiserver speaks json language and returns requests in json format
+  * Can use `kubectl get nodes -o wide` command to get info that is not available
+
+
+* Would like to see nodes and CPU count in nice format. 
+  * None of built in commands can give you these in this format. 
+   ![kubectl-json-path](/images/kubectl-json-path.jpg)
+
+* How to JSON PATH in kubectl? 
+  1. Identify the kubectl command
+  2. Familiarize with JSON output
+     * Add -o json to get pods
+  3. Form the JSON path Query
+  4. Use the JSON PATH query with the kubectl command 
+     * -o=jsonpath={query}
+       * `$` not mandatory, kubectl adds it
+     * kubectl get pods -o=jsonpath=.items[0].spec.containers[0].image 
+
+### JSON PATH Examples
+
+* Examples
+  * `kubectl get nodes -o=jsonpath='{.items[*].metadata.name}'`
+    * outputs `master node01` names of nodes
+  * `kubectl get nodes -o=jsonpath='{.items[*].status.nodeInfo.architecture}'`
+    * outputs `amd64 amd64` hardware architecture on the nodes
+  * `kubectl get pods -o=jsonpath='{.items[*].status.capacity.cpu}'`
+    * outputs `4 4` how many cpus per nodes
+* can merge queries too
+  * `kubectl get nodes -o=jsonpath='{.items[*].metadata.name}{.items[*].status.capacity.cpu}'`
+    * Outputs `master node01 4 4` Name of nodes and how many cpus per node 
+* Formatting options:
+  * Can insert newline param in between queries
+  * `kubectl get nodes -o=jsonpath='{.items[*].metadata.name} {"\n"} {.items[*].status.capacity.cpu}`
+    * outputs 
+      ```
+        master node01
+        4      4
+      ```
+
+
+### Loops - Range
+
+  * Want to be able to say
+    ```
+      FOR EACH NODE
+        PRINT NODE NAME \t PRINT CPU COUNT \n
+      END FOR
+    ``` 
+  * `'{range .items[*]}`
+    * `{.metadata.name} {"\t"} {status.capacity.cpu} {"\n"}`
+  * `{end}'`
+  * Merge it all into a single line 
+    * `kubectl get nodes -o=jsonpath='{range .items[*]}{.metadata.name}{"\t"} {.status.capcity.cpu}{"\n"}{end}'`
+
+### JSON PATH for Custom Columns
+
+  * `kubectl get nodes -o=custom-columns=<COLUMN NAME>:<JSON PATH>`
+    * can be easier than using the loop method
+    * `kubectl get nodes -o=custom-columns=NODE:.metadata.name ,CPU:.status.capacity.cpu`
+      * Must exclude the .items[*] because it assumes its for each item in the list already
+      ```
+        NODE     CPU
+        master    4
+        node01    4
+      ``` 
+
+### JSON PATH for Sort
+
+`kubectl get nodes --sort-by=.metadata.name`
+
+`kubectl get nodes --sort-by=.status.capacity.cpu`
+
+![json-path-sort](/images/json-path-sort.jpg)
 
 
 # Quick Notes
@@ -5952,6 +6200,16 @@ More tips documented in the kubernetes documentation [Troubleshooting Guide](htt
 
 * While testing the Network Namespaces, if you come across issue where you can't ping one namespace from the other, make sure you set the NETMASK while setting IP Address. ie: 192.168.1.10/24
 
+## ETCD BACKUP Params
+
+* `ETCDCTL_API=3 etcdctl  --endpoints=[ENDPOINT] --cacert=[CA CERT] --cert=[ETCD SERVER CERT] --key=[ETCD SERVER KEY] snapshot save [BACKUP FILE NAME]`
+
+* Can find all of these from `kubectl get pods -n kube-system` - `kubectl describe pod etcd-master -n kube-system` 
+  * endpoints is `--advertise-client-urls`
+  * cacert is `--trusted-ca-file`
+  * cert is `--cert-file`
+  * key is `--key-file`
+  * backup file name is provided
 
 ## Handy Networking Commands
 * `ip link`
@@ -6182,6 +6440,17 @@ More tips documented in the kubernetes documentation [Troubleshooting Guide](htt
     - [Check Accessibility](#check-accessibility)
     - [Check Pods](#check-pods)
   - [Control Plane Failure](#control-plane-failure)
+    - [Control Plane Tips](#control-plane-tips)
+  - [Worker Node Failures](#worker-node-failures)
+    - [Check Kubelet Status](#check-kubelet-status)
+    - [Check Certificates](#check-certificates)
+- [JSON-PATH](#json-path)
+  - [JSON PATH - Criteria](#json-path---criteria)
+  - [JSON PATH - Kubernetes](#json-path---kubernetes)
+    - [JSON PATH Examples](#json-path-examples)
+    - [Loops - Range](#loops---range)
+    - [JSON PATH for Custom Columns](#json-path-for-custom-columns)
+    - [JSON PATH for Sort](#json-path-for-sort)
 - [Quick Notes](#quick-notes)
   - [Editing Pods and Deployments](#editing-pods-and-deployments)
     - [Edit a POD](#edit-a-pod)
@@ -6192,6 +6461,7 @@ More tips documented in the kubernetes documentation [Troubleshooting Guide](htt
   - [Inspect Authorization Types](#inspect-authorization-types)
   - [Check to see which user is used to execute a process](#check-to-see-which-user-is-used-to-execute-a-process)
   - [Network Namespaces Checks](#network-namespaces-checks)
+  - [ETCD BACKUP Params](#etcd-backup-params)
   - [Handy Networking Commands](#handy-networking-commands)
   - [Get the IP of a Pod / nod](#get-the-ip-of-a-pod--nod)
   - [Labs to make sure I know better](#labs-to-make-sure-i-know-better)
