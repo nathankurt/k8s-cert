@@ -149,10 +149,10 @@
 - [Storage](#storage)
   - [Storage In Docker](#storage-in-docker)
     - [Docker Layered Architecture](#docker-layered-architecture)
-    - [Volumes](#volumes)
+    - [Docker Volumes](#docker-volumes)
   - [Container Storage Interface](#container-storage-interface)
     - [What CSI Looks Like](#what-csi-looks-like)
-  - [Volumes](#volumes-1)
+  - [Volumes](#volumes)
   - [Persistent Volumes](#persistent-volumes)
   - [Persistent Volume Claims](#persistent-volume-claims)
   - [Using Persistent Volume Claims in PODS](#using-persistent-volume-claims-in-pods)
@@ -187,6 +187,8 @@
     - [Services vs Ingress](#services-vs-ingress)
   - [Ingress Comes in](#ingress-comes-in)
     - [Ingress Controller](#ingress-controller)
+      - [ConfigMaps](#configmaps)
+      - [ServiceAccounts](#serviceaccounts)
     - [Ingress Resources](#ingress-resources)
   - [Ingress - Annotations and rewrite-target](#ingress---annotations-and-rewrite-target)
 - [Kubernetes the Hard Way](#kubernetes-the-hard-way)
@@ -3984,7 +3986,7 @@ Back to Earlier Application Traffic Example
 ![docker-containers-layerd](/images/docker-container-layer.jpg)
 
 
-### Volumes
+### Docker Volumes
 * What if we wished to persist the data
   *  We can create a persistant volume. stored in `/var/lib/docker/volumes/data_volumes`
   *  When you want to attach it run
@@ -4244,7 +4246,7 @@ When you have alot of users with a lot of pods, the users would have to configur
           image: nginx
           volumeMounts:
           - mountPath: "/var/www/html"
-            name: mypd
+            name: mypod
       volumes:
         - name: mypod
           persistentVolumeClaim:
@@ -5423,6 +5425,9 @@ More Info About CoreDNS here:
     * SSL settings
     * Session timeout
     * etc.
+ 
+#### ConfigMaps
+
   * In order to decouple these configuration data from the nginx-controller image, you must create a ConfigMap object and pass that in. 
   * Doesn't need to have any entries at this point. 
     * but creating one makes it easy for you to modify a configuration setting in the future and not have to worry about modifying the nginx configuration files
@@ -5457,7 +5462,9 @@ More Info About CoreDNS here:
       selector:
         name: nginx-ingress   
     ```
-  
+
+#### ServiceAccounts
+
   * Ingress controllers have additional intelligence built into them to monitor the kbuernetes cluster for ingress resources and configure the underlying nginx server when something is changed
   * But for the ingress controller to do this, it requires a service account with a right set of permissions
     * For that we create a service account with the correct roles and role bindings
@@ -6384,10 +6391,10 @@ More tips documented in the kubernetes documentation [Troubleshooting Guide](htt
 - [Storage](#storage)
   - [Storage In Docker](#storage-in-docker)
     - [Docker Layered Architecture](#docker-layered-architecture)
-    - [Volumes](#volumes)
+    - [Docker Volumes](#docker-volumes)
   - [Container Storage Interface](#container-storage-interface)
     - [What CSI Looks Like](#what-csi-looks-like)
-  - [Volumes](#volumes-1)
+  - [Volumes](#volumes)
   - [Persistent Volumes](#persistent-volumes)
   - [Persistent Volume Claims](#persistent-volume-claims)
   - [Using Persistent Volume Claims in PODS](#using-persistent-volume-claims-in-pods)
@@ -6422,6 +6429,8 @@ More tips documented in the kubernetes documentation [Troubleshooting Guide](htt
     - [Services vs Ingress](#services-vs-ingress)
   - [Ingress Comes in](#ingress-comes-in)
     - [Ingress Controller](#ingress-controller)
+      - [ConfigMaps](#configmaps)
+      - [ServiceAccounts](#serviceaccounts)
     - [Ingress Resources](#ingress-resources)
   - [Ingress - Annotations and rewrite-target](#ingress---annotations-and-rewrite-target)
 - [Kubernetes the Hard Way](#kubernetes-the-hard-way)

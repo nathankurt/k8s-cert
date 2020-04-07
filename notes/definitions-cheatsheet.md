@@ -1,46 +1,56 @@
-1. [Definitions](#definitions)
-   1. [POD](#pod)
-      1. [Namespace In Pod](#namespace-in-pod)
-   2. [ReplicaSet](#replicaset)
-   3. [ReplicationController](#replicationcontroller)
-   4. [Deployments](#deployments)
-   5. [NameSpace](#namespace)
-   6. [Resource Quota](#resource-quota)
-   7. [NodePort Service](#nodeport-service)
-   8. [ClusterIP Service](#clusterip-service)
-   9. [Binding Object](#binding-object)
-   10. [Selectors](#selectors)
-   11. [Annotations](#annotations)
-   12. [Toleration](#toleration)
-   13. [Node Selectors](#node-selectors)
-   14. [Node Affinity](#node-affinity)
-   15. [Resource Requirements](#resource-requirements)
-   16. [Resource Limits](#resource-limits)
-   17. [Daemon Sets](#daemon-sets)
-   18. [Deploy Additional Scheduler - -kubeadm](#deploy-additional-scheduler----kubeadm)
-      1. [Kube Scheduler](#kube-scheduler)
-      2. [Custom Scheduler](#custom-scheduler)
-      3. [Use Custom Scheduler](#use-custom-scheduler)
-   19. [Event-Simulator](#event-simulator)
-   20. [Docker Args in Pod](#docker-args-in-pod)
-   21. [Environment Variables](#environment-variables)
-      1. [Plain Key Values](#plain-key-values)
-      2. [ConfigMaps](#configmaps)
-      3. [Secrets](#secrets)
-   22. [Multi Container Pods](#multi-container-pods)
-   23. [InitContainers](#initcontainers)
-   24. [Cert Config](#cert-config)
-   25. [OpenSSL Config](#openssl-config)
-   26. [Kubelet-Config](#kubelet-config)
-   27. [CertifcateSigningRequest](#certifcatesigningrequest)
-   28. [KubeConfig](#kubeconfig)
-   29. [Role Based Access Controls](#role-based-access-controls)
-      1. [Role](#role)
-      2. [RoleBinding](#rolebinding)
-   30. [Cluster Roles and Role Bindings](#cluster-roles-and-role-bindings)
-      1. [Role](#role-1)
-      2. [RoleBinding](#rolebinding-1)
-   31. [Volumes and Mounts](#volumes-and-mounts)
+- [Definitions](#definitions)
+  - [POD](#pod)
+    - [Namespace In Pod](#namespace-in-pod)
+  - [ReplicaSet](#replicaset)
+  - [ReplicationController](#replicationcontroller)
+  - [Deployments](#deployments)
+  - [NameSpace](#namespace)
+  - [Resource Quota](#resource-quota)
+  - [NodePort Service](#nodeport-service)
+  - [ClusterIP Service](#clusterip-service)
+  - [Binding Object](#binding-object)
+  - [Selectors](#selectors)
+  - [Annotations](#annotations)
+  - [Toleration](#toleration)
+  - [Node Selectors](#node-selectors)
+  - [Node Affinity](#node-affinity)
+  - [Resource Requirements](#resource-requirements)
+  - [Resource Limits](#resource-limits)
+  - [Daemon Sets](#daemon-sets)
+  - [Deploy Additional Scheduler - -kubeadm](#deploy-additional-scheduler----kubeadm)
+    - [Kube Scheduler](#kube-scheduler)
+    - [Custom Scheduler](#custom-scheduler)
+    - [Use Custom Scheduler](#use-custom-scheduler)
+  - [Event-Simulator](#event-simulator)
+  - [Docker Args in Pod](#docker-args-in-pod)
+  - [Environment Variables](#environment-variables)
+    - [Plain Key Values](#plain-key-values)
+    - [ConfigMaps](#configmaps)
+    - [Secrets](#secrets)
+  - [Multi Container Pods](#multi-container-pods)
+  - [InitContainers](#initcontainers)
+  - [Cert Config](#cert-config)
+  - [OpenSSL Config](#openssl-config)
+  - [Kubelet-Config](#kubelet-config)
+  - [CertifcateSigningRequest](#certifcatesigningrequest)
+  - [KubeConfig](#kubeconfig)
+  - [Role Based Access Controls](#role-based-access-controls)
+    - [Role](#role)
+    - [RoleBinding](#rolebinding)
+  - [Cluster Roles and Role Bindings](#cluster-roles-and-role-bindings)
+    - [Role](#role-1)
+    - [RoleBinding](#rolebinding-1)
+  - [Volumes and Mounts](#volumes-and-mounts)
+    - [Persistent Volumes](#persistent-volumes)
+    - [Persistent Volume Claims](#persistent-volume-claims)
+    - [Persistent Volume Claims in PODS](#persistent-volume-claims-in-pods)
+- [Networking](#networking)
+  - [Ingress](#ingress)
+    - [Ingress Controller](#ingress-controller)
+      - [Config Maps](#config-maps)
+      - [Service Account](#service-account)
+    - [Ingress Resources](#ingress-resources)
+    - [Annotations and Rewrite Targets](#annotations-and-rewrite-targets)
 
 # Definitions
 
@@ -999,4 +1009,274 @@ spec:
       path: /data
       type: Directory
   ######################################################################  
+```
+
+More Info [here](/notes/core-concepts.md/#volumes)
+
+### Persistent Volumes
+
+`pv-definition.yaml`
+```yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata: 
+  name: pv-vol1
+
+spec:
+#################################
+  accessModes:
+
+    - ReadWriteOnce
+  #- ReadWriteMany
+  #- ReadOnlyMany
+
+  capacity:
+    storage: 1Gi
+
+  #don't use this option in a prod environment
+  hostPath:
+    path: /tmp/data
+######################################
+```
+
+Can also replace host path options with supported storage solutions:
+
+```yaml
+awsElasticBlockStore:
+  volumeID: <volume-id>
+  fsType: ext4
+```
+
+More Info [here](/notes/core-concepts.md/#persistent-volumes)
+
+### Persistent Volume Claims
+
+`pvc-definition.yaml`
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: myclaim
+spec:
+  accessModes:
+    - ReadWriteOnce
+
+  resources:
+    requests:
+      storage: 500Mi
+
+```
+More Info [here](/notes/core-concepts.md/#persistent-volume-claims)
+
+### Persistent Volume Claims in PODS
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mypod
+spec:
+  containers:
+    - name: myfrontend
+      image: nginx
+      ###########################
+      volumeMounts:
+      - mountPath: "/var/www/html"
+        name: mypod
+  volumes:
+    - name: mypod
+      persistentVolumeClaim:
+        claimName: myclaim
+#########################################
+```
+
+More Info [here](/notes/core-concepts.md/#using-persistent-volume-claims-in-pods)
+
+# Networking
+
+## Ingress 
+
+Similar to a service, but more like a load balancer built in to the kubernetes cluster.
+
+### Ingress Controller
+
+`nginx-ingress-controller.yaml`
+```yaml
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: nginx-ingress-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: nginx-ingress
+  template:
+    metadata:
+      labels:
+        name: nginx-ingress
+    spec:
+      containers:
+        - name: nginx-ingress-controller
+          image: quay.io/kubernetes-ingress-controller/nginx-ingress-controller:0.21.0
+          ##Special build of nginx built specifically to be used as an ingress controller in kubernets
+
+      args: 
+        - /nginx-ingress-controller
+        - --configmap=$(POD_NAMESPACE)/nginx-configuration
+      
+      env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace  
+
+      #specify the ports used by the ingress controller(happens to be 80 and 443)
+      ports:
+        - name: http
+          containerPort: 80
+        - name: https
+          containerPort: 443
+```
+
+More Info [here](/notes/core-concepts.md/#ingress-controller)
+
+#### Config Maps
+
+Decouple config data from nginx-controller image, you must create a ConfigMap object and pass that in
+
+`nginx-config.yaml`
+```yaml
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: nginx-configuration
+```
+
+More Info [here](/notes/core-concepts.md/#configmaps)
+
+#### Service Account
+ 
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nginx-ingress-serviceaccount 
+```
+
+More Info [here](/notes/core-concepts.md/#serviceaccounts)
+
+### Ingress Resources
+
+```yaml
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: ingress-wear
+spec:
+  #application is routed to applicaion services and not pods directly
+  backend: #defines where traffic will be routed to
+    serviceName: wear-service
+    servicePort: 80
+```
+
+```yaml
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: ingress-wear-watch
+spec:
+  # requirement is to handle all traffic coming to `my-online-store.com`
+  # route them based on the URL path
+  # just need a single url path. 
+  rules:
+  - http:
+      paths:
+
+      - path: /wear
+        backend:
+          serviceName: wear-service
+          servicePort: 80 
+
+      - path: /watch
+        backend: 
+          serviceName: watch-service
+          servicePort: 80 
+``` 
+
+
+`Ingress-wear-watch.yaml`
+```yaml
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: ingress-wear-watch
+spec:
+  
+  rules:
+
+  - host: wear.my-online-store.com
+    http:
+      paths:
+        - backend:
+            serviceName: wear-service
+            servicePort: 80
+    #if you odn't specify the host field, it will consider it as a star.         
+  - host: watch.my-online-store.com
+    http:
+      paths:
+        - backend:
+            serviceName: watch-service
+            servicePort: 80  
+
+```
+
+Learn More [here](/notes/core-concepts.md/#ingress---annotations-and-rewrite-target)
+
+### Annotations and Rewrite Targets
+
+```yaml
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: test-ingress
+  namespace: critical-space
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+    - http:
+        paths:
+        - path: /pay
+          backend:
+            serviceName: pay-service
+            servicePort: 8282  
+  ```
+
+
+In another example given [here](https://kubernetes.github.io/ingress-nginx/examples/rewrite/), this could also be:
+  `replace("/something(/|$)(.*)", "/$2")`
+
+```yaml
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+  
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+  name: rewrite
+  namespace: default
+spec:
+  rules:
+  - host: rewrite.bar.com
+    http:
+      paths:
+      - backend:
+        serviceName: http-svc
+        servicePort: 80
+      path: /something(/|$)(.*)  
 ```
