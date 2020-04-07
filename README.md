@@ -35,6 +35,8 @@ An important thing to note is that you can only have one other tab open at a tim
   * This may not be all that useful during the exam, but who knows a cheatsheet may come in handy later
 * [Kubectl commands docs](https://kubernetes.io/docs/reference/generated/kubectl/kubectl-commands)
   * This link might be my go to for the exam, it seems super useful if there is a quick command you can't remember and need to enter it in quickly. 
+* [Upgrading a Kubeadm Cluster](https://v1-17.docs.kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/)
+  * For when you need to use kubeadm stuff on the exam
 
 
 
@@ -44,6 +46,10 @@ These are links that aren't allowed for use on the exam, but helped with studyin
 
 * [Kubernetes Imperative Commands](https://kubectl.docs.kubernetes.io/pages/imperative_porcelain/creating_resources.html)
   * This link has all the imperative commands that will be super helpful for making things fast and not having to worry about creating annoying yaml files. 
+* [CKA tips medium article static pods](https://medium.com/@imarunrk/certified-kubernetes-administrator-cka-tips-and-tricks-part-2-b4f5c636eb4)
+* [CKA Tips Medium Article ETCD Backup](https://medium.com/@imarunrk/certified-kubernetes-administrator-cka-tips-and-tricks-part-3-2e7b44e89a3b)
+  * Both of these articles are super good for tips and learning how to do some trickier things quickly to get points and save time. The author also has other links 
+* 
 
 ## Reference
 Notes from [Certified Kubernetes Administrator (CKA) with Practice Tests By Mumshad Mannambeth](https://www.udemy.com/course/certified-kubernetes-administrator-with-practice-tests/) Udemy Course. To study for the CKA Exam
@@ -51,3 +57,5 @@ Notes from [Certified Kubernetes Administrator (CKA) with Practice Tests By Mums
 To View Exam Curriculum, go to the [cncf/curriculum repo](https://github.com/cncf/curriculum)
 
 [CKA Certifiaction Information](https://www.cncf.io/certification/cka/)
+
+Medium Articles Linked Written By [Arun Ramakani](https://medium.com/@imarunrk)
