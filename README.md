@@ -22,7 +22,7 @@ For Notes, start [In the Notes Folder!](/notes) and [Core Concepts](/notes/core-
 
 I would **highly** recommend this course so far because of the labs and practice exams the course comes with. Just having the notes is not nearly as helpful without getting the practice from the environments that are spun up for you as well. 
 
-The Mock Exams were a lifesaver.
+The Mock Exams were a lifesaver. If you can do all of those without really thinking about it, you should be in good shape for the exam. 
 
 
 ### Links to Bookmark(That You Can Use On the Exam)
